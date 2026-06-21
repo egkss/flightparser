@@ -7,7 +7,7 @@
 
   const heartbeatId = setInterval(() => {
     if (!completed) {
-      chrome.runtime.sendMessage({ type: "aeroflot-progress" }).catch(() => {});
+      sendMessage({ type: "aeroflot-progress" });
     }
   }, 10000);
 
@@ -21,7 +21,7 @@
         completed = true;
         clearInterval(intervalId);
         clearInterval(heartbeatId);
-        chrome.runtime.sendMessage({ type: "aeroflot-results", results });
+        sendMessage({ type: "aeroflot-results", results });
         return;
       }
     }
@@ -30,7 +30,7 @@
       completed = true;
       clearInterval(intervalId);
       clearInterval(heartbeatId);
-      chrome.runtime.sendMessage({
+      sendMessage({
         type: "aeroflot-results",
         error: "На странице не появились цены; проверь CAPTCHA или блокировку",
         results: [],
@@ -60,5 +60,16 @@
 
   function normalizeFlightNumber(value) {
     return value.replace(/\s/g, "");
+  }
+
+  function sendMessage(message) {
+    try {
+      const response = chrome.runtime.sendMessage(message);
+      if (response?.catch) response.catch(() => {});
+    } catch {
+      completed = true;
+      clearInterval(intervalId);
+      clearInterval(heartbeatId);
+    }
   }
 })();

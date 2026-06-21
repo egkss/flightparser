@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Aviaparser Aeroflot Monitor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Собирает цены с сайта Аэрофлота через обычный Chrome и отправляет их в Aviaparser.",
   "permissions": ["alarms", "storage", "tabs"],
   "host_permissions": ["http://*/*", "https://*/*"],

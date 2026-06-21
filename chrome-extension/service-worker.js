@@ -89,13 +89,14 @@ async function runMonitor() {
     const activeRoutes = routes.filter((route) => route.active);
     let sentRoutes = 0;
     let foundDeals = 0;
+    const errors = [];
 
     for (const route of activeRoutes) {
       const dates = buildDateRange(route.date_from, route.date_to);
       if (dates.length > Number(settings.maxWindowDays)) {
-        await setStatus(
-          `Пропущен ${route.origin} → ${route.destination}: окно ${dates.length} дней больше лимита`,
-        );
+        const error = `Пропущен ${route.origin} → ${route.destination}: окно ${dates.length} дней больше лимита`;
+        errors.push(error);
+        await setStatus(error);
         continue;
       }
 
@@ -106,7 +107,9 @@ async function runMonitor() {
           const result = await scanDate(route, departureDate);
           deals.push(...result);
         } catch (error) {
-          await setStatus(`${route.origin} → ${route.destination}: ${error.message}`);
+          const message = `${route.origin} → ${route.destination}, ${departureDate}: ${error.message}`;
+          errors.push(message);
+          await setStatus(message);
         }
       }
 
@@ -122,9 +125,10 @@ async function runMonitor() {
       foundDeals += bestDeals.length;
     }
 
+    const errorSuffix = errors.length ? `; ошибок ${errors.length}: ${errors[0]}` : "";
     await chrome.storage.local.set({
       lastRunAt: new Date().toISOString(),
-      lastStatus: `Готово: треков ${sentRoutes}, цен ${foundDeals}`,
+      lastStatus: `Готово: треков ${sentRoutes}, цен ${foundDeals}${errorSuffix}`,
     });
   } catch (error) {
     await setStatus(`Ошибка: ${error.message}`);
