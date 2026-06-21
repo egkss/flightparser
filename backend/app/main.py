@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from .aviasales_client import AviasalesClient
+from .cities import resolve_city_code
+from .config import Settings, get_settings
+from .database import Database
+from .models import MonitorRunResult, SearchRequest, SearchResponse, TrackingCreate
+from .scheduler import PriceMonitor, create_scheduler
+from .telegram_notifier import TelegramNotifier
+
+settings = get_settings()
+database = Database(settings.database_file)
+client = AviasalesClient(settings)
+notifier = TelegramNotifier(settings)
+monitor = PriceMonitor(database, client, notifier, settings)
+scheduler = create_scheduler(monitor, settings)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await database.init()
+    scheduler.start()
+    try:
+        yield
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
+if frontend_dir.exists():
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+
+
+def get_db() -> Database:
+    return database
+
+
+def get_client() -> AviasalesClient:
+    return client
+
+
+@app.get("/")
+async def index() -> FileResponse:
+    index_path = frontend_dir / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="Frontend is not built yet")
+    return FileResponse(index_path)
+
+
+@app.get("/api/health")
+async def health(settings_: Settings = Depends(get_settings)) -> dict:
+    return {
+        "ok": True,
+        "source": "travelpayouts" if settings_.travelpayouts_token else "demo",
+        "telegram_enabled": bool(settings_.telegram_bot_token and settings_.telegram_chat_id),
+        "check_interval_minutes": settings_.check_interval_minutes,
+    }
+
+
+@app.post("/api/search", response_model=SearchResponse)
+async def search(request: SearchRequest, api_client: AviasalesClient = Depends(get_client)) -> SearchResponse:
+    origin_code, destination_code = _resolve_codes(request.origin, request.destination)
+    results = await api_client.search_window(request, origin_code, destination_code)
+    return SearchResponse(origin_code=origin_code, destination_code=destination_code, results=results)
+
+
+@app.get("/api/tracking")
+async def list_tracking(db: Database = Depends(get_db)):
+    return await db.list_routes()
+
+
+@app.post("/api/tracking")
+async def create_tracking(request: TrackingCreate, db: Database = Depends(get_db)):
+    origin_code, destination_code = _resolve_codes(request.origin, request.destination)
+    route = await db.create_route(request, origin_code, destination_code)
+    return route
+
+
+@app.delete("/api/tracking/{route_id}")
+async def delete_tracking(route_id: int, db: Database = Depends(get_db)) -> dict:
+    await db.delete_route(route_id)
+    return {"ok": True}
+
+
+@app.get("/api/tracking/{route_id}/history")
+async def route_history(route_id: int, db: Database = Depends(get_db)):
+    return await db.history(route_id)
+
+
+@app.post("/api/monitor/run", response_model=MonitorRunResult)
+async def run_monitor_once() -> MonitorRunResult:
+    return await monitor.run_once()
+
+
+def _resolve_codes(origin: str, destination: str) -> tuple[str, str]:
+    try:
+        return resolve_city_code(origin), resolve_city_code(destination)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error

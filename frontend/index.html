@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aviaparser</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div>
+          <p class="eyebrow">Aviaparser</p>
+          <h1>Мониторинг дешевых авиабилетов</h1>
+        </div>
+
+        <div class="status-panel">
+          <div>
+            <span>Источник</span>
+            <strong id="sourceStatus">...</strong>
+          </div>
+          <div>
+            <span>Telegram</span>
+            <strong id="telegramStatus">...</strong>
+          </div>
+          <div>
+            <span>Интервал</span>
+            <strong id="intervalStatus">...</strong>
+          </div>
+        </div>
+
+        <button id="runMonitorButton" class="ghost-button" type="button">Запустить проверку</button>
+      </aside>
+
+      <section class="workspace">
+        <form id="searchForm" class="panel search-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Поиск</p>
+              <h2>Маршрут и окно дат</h2>
+            </div>
+            <button class="primary-button" type="submit">Найти</button>
+          </div>
+
+          <div class="form-grid">
+            <label>
+              <span>Откуда</span>
+              <input name="origin" value="Омск" autocomplete="off" required />
+            </label>
+            <label>
+              <span>Куда</span>
+              <input name="destination" value="Москва" autocomplete="off" required />
+            </label>
+            <label>
+              <span>Дата от</span>
+              <input name="date_from" type="date" required />
+            </label>
+            <label>
+              <span>Дата до</span>
+              <input name="date_to" type="date" required />
+            </label>
+            <label>
+              <span>Порог цены, RUB</span>
+              <input name="price_threshold" type="number" min="1" placeholder="например 9000" />
+            </label>
+          </div>
+
+          <div class="toggles">
+            <label class="toggle">
+              <input name="direct_only" type="checkbox" checked />
+              <span>Только прямые</span>
+            </label>
+            <label class="toggle">
+              <input name="baggage_required" type="checkbox" />
+              <span>Багаж обязателен</span>
+            </label>
+            <label class="toggle">
+              <input name="notify_error_fare" type="checkbox" checked />
+              <span>Error fare -30%</span>
+            </label>
+          </div>
+
+          <div class="actions-row">
+            <button id="createTrackButton" class="secondary-button" type="button">Поставить на мониторинг</button>
+            <p id="formMessage" class="message"></p>
+          </div>
+        </form>
+
+        <section class="split-grid">
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Результаты</p>
+                <h2>Топ-3 в окне</h2>
+              </div>
+            </div>
+            <div id="resultsList" class="deal-list empty-state">Нет результатов</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Треки</p>
+                <h2>Активный мониторинг</h2>
+              </div>
+            </div>
+            <div id="trackingList" class="track-list empty-state">Треков пока нет</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">История</p>
+              <h2 id="historyTitle">Выбери трек</h2>
+            </div>
+          </div>
+          <div id="historyList" class="history-list empty-state">История появится после первой проверки</div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
