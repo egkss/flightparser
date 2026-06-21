@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     travelpayouts_marker: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    extension_api_token: str = ""
     check_interval_minutes: int = 30
     telegram_drop_percent: float = 3.0
     error_fare_percent: float = 30.0

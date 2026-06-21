@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Aviaparser Aeroflot Monitor",
+  "version": "1.0.0",
+  "description": "Собирает цены с сайта Аэрофлота через обычный Chrome и отправляет их в Aviaparser.",
+  "permissions": ["alarms", "storage", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Aviaparser Aeroflot Monitor"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.aeroflot.ru/*/sb/search*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html"
+}

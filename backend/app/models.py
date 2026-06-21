@@ -82,3 +82,23 @@ class MonitorRunResult(BaseModel):
     checked_routes: int
     saved_items: int
     sent_notifications: int
+
+
+class AeroflotDealInput(BaseModel):
+    depart_date: date
+    price: int = Field(ge=1)
+    flight_number: str | None = Field(default=None, max_length=80)
+    transfers: int = Field(default=0, ge=0, le=4)
+    link: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("link")
+    @classmethod
+    def validate_aeroflot_link(cls, value: str) -> str:
+        if not value.startswith("https://www.aeroflot.ru/"):
+            raise ValueError("Допустимы только ссылки aeroflot.ru")
+        return value
+
+
+class AeroflotResultsIngest(BaseModel):
+    route_id: int = Field(ge=1)
+    results: list[AeroflotDealInput] = Field(min_length=1, max_length=30)

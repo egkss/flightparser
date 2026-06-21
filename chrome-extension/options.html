@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aviaparser Aeroflot Monitor</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Aviaparser Aeroflot Monitor</h1>
+      <p>Chrome должен быть запущен во время мониторинга.</p>
+
+      <form id="settingsForm">
+        <label>
+          <span>Адрес Aviaparser</span>
+          <input id="serverUrl" type="url" placeholder="http://1.2.3.4:8000" required />
+        </label>
+        <label>
+          <span>Токен расширения</span>
+          <input id="extensionToken" type="password" autocomplete="off" required />
+        </label>
+        <label>
+          <span>Интервал, минут</span>
+          <input id="intervalMinutes" type="number" min="1" max="1440" required />
+        </label>
+        <label>
+          <span>Максимальное окно трека, дней</span>
+          <input id="maxWindowDays" type="number" min="1" max="31" required />
+        </label>
+
+        <div class="actions">
+          <button type="submit">Сохранить</button>
+          <button id="testButton" type="button">Проверить сервер</button>
+          <button id="runButton" type="button">Запустить сейчас</button>
+        </div>
+      </form>
+
+      <section>
+        <strong>Состояние</strong>
+        <p id="status">Настройки не загружены</p>
+        <p id="lastRun"></p>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

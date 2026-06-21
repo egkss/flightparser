@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import hmac
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +13,14 @@ from .aviasales_client import AviasalesClient
 from .cities import resolve_city_code
 from .config import Settings, get_settings
 from .database import Database
-from .models import MonitorRunResult, SearchRequest, SearchResponse, TrackingCreate
+from .models import (
+    AeroflotResultsIngest,
+    FlightDeal,
+    MonitorRunResult,
+    SearchRequest,
+    SearchResponse,
+    TrackingCreate,
+)
 from .scheduler import PriceMonitor, create_scheduler
 from .telegram_notifier import TelegramNotifier
 
@@ -70,6 +78,7 @@ async def health(settings_: Settings = Depends(get_settings)) -> dict:
         "ok": True,
         "source": "travelpayouts" if settings_.travelpayouts_token else "demo",
         "telegram_enabled": bool(settings_.telegram_bot_token and settings_.telegram_chat_id),
+        "extension_enabled": bool(settings_.extension_api_token),
         "check_interval_minutes": settings_.check_interval_minutes,
     }
 
@@ -107,6 +116,54 @@ async def route_history(route_id: int, db: Database = Depends(get_db)):
 @app.post("/api/monitor/run", response_model=MonitorRunResult)
 async def run_monitor_once() -> MonitorRunResult:
     return await monitor.run_once()
+
+
+@app.post("/api/providers/aeroflot/results", response_model=MonitorRunResult)
+async def ingest_aeroflot_results(
+    payload: AeroflotResultsIngest,
+    x_extension_token: str = Header(default=""),
+    db: Database = Depends(get_db),
+    settings_: Settings = Depends(get_settings),
+) -> MonitorRunResult:
+    if not settings_.extension_api_token:
+        raise HTTPException(status_code=503, detail="Приём данных расширения не настроен")
+    if not hmac.compare_digest(x_extension_token, settings_.extension_api_token):
+        raise HTTPException(status_code=401, detail="Неверный токен расширения")
+
+    route = await db.get_route(payload.route_id)
+    if route is None or not route.active:
+        raise HTTPException(status_code=404, detail="Активный трек не найден")
+
+    deals = []
+    for item in payload.results:
+        if not route.date_from <= item.depart_date <= route.date_to:
+            raise HTTPException(status_code=422, detail="Дата результата находится вне окна трека")
+        if route.direct_only and item.transfers != 0:
+            continue
+        deals.append(
+            FlightDeal(
+                origin=route.origin,
+                destination=route.destination,
+                origin_code=route.origin_code,
+                destination_code=route.destination_code,
+                depart_date=item.depart_date,
+                price=item.price,
+                airline="SU",
+                flight_number=item.flight_number,
+                transfers=item.transfers,
+                baggage="unknown",
+                link=item.link,
+                source="aeroflot_website",
+                raw={"extension": True},
+            )
+        )
+
+    saved_items, sent_notifications = await monitor.ingest_deals(route, deals[:3])
+    return MonitorRunResult(
+        checked_routes=1,
+        saved_items=saved_items,
+        sent_notifications=sent_notifications,
+    )
 
 
 def _resolve_codes(origin: str, destination: str) -> tuple[str, str]:

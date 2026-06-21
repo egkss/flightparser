@@ -74,6 +74,7 @@ TRAVELPAYOUTS_TOKEN=your_token
 TRAVELPAYOUTS_MARKER=your_marker
 TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
+EXTENSION_API_TOKEN=long_random_token
 CHECK_INTERVAL_MINUTES=30
 TELEGRAM_DROP_PERCENT=3
 ERROR_FARE_PERCENT=30
@@ -140,4 +141,36 @@ uvicorn backend.app.main:app --reload
 5. Открыть порт `8000` или поставить reverse proxy.
 
 Для первого запуска аккаунты в вебе не используются. Если панель будет доступна из интернета, лучше закрыть ее через reverse proxy с Basic Auth, VPN или доступом по IP.
+
+## Мониторинг сайта Аэрофлота через Chrome
+
+Папка `chrome-extension` содержит расширение Chrome, которое открывает поиск Аэрофлота в фоновых вкладках и отправляет найденные цены в Aviaparser. Chrome должен оставаться запущенным.
+
+На сервере создай отдельный токен и добавь его в `.env`:
+
+```bash
+openssl rand -hex 32
+```
+
+```env
+EXTENSION_API_TOKEN=полученная_строка
+```
+
+Перезапусти backend:
+
+```bash
+docker compose up -d --build
+```
+
+Установка расширения:
+
+1. Скачай папку `chrome-extension` на компьютер с Chrome.
+2. Открой `chrome://extensions`.
+3. Включи режим разработчика.
+4. Нажми «Загрузить распакованное расширение» и выбери папку `chrome-extension`.
+5. Открой настройки расширения.
+6. Укажи адрес Aviaparser и тот же `EXTENSION_API_TOKEN`.
+7. Сохрани настройки и нажми «Запустить сейчас».
+
+По умолчанию расширение проверяет треки с окном не больше 7 дней каждые 5 минут. При проверке Chrome создает и закрывает фоновые вкладки Аэрофлота. Если сайт показывает CAPTCHA, проверку нужно один раз пройти вручную в обычной вкладке Chrome.
 # flightparser
