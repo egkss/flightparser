@@ -133,9 +133,89 @@
               <span>Сохранено результатов</span>
               <strong id="browserParserTotal">...</strong>
             </div>
+            <div>
+              <span>Heartbeat</span>
+              <strong id="browserParserHeartbeat">...</strong>
+            </div>
           </div>
+          <p id="browserParserCurrentRoute" class="message"></p>
+          <p id="browserParserError" class="message error-message"></p>
           <div id="browserParserSources" class="source-summary"></div>
           <div id="browserParserList" class="deal-list empty-state">Данных от расширения пока нет</div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Фильтры</p>
+              <h2>Лента всех результатов</h2>
+            </div>
+          </div>
+          <form id="resultFilters" class="filter-grid">
+            <label>
+              <span>Источник</span>
+              <select name="source">
+                <option value="">Все</option>
+                <option value="travelpayouts">Aviasales / Travelpayouts</option>
+                <option value="aeroflot_website">Аэрофлот</option>
+                <option value="s7_website">S7</option>
+                <option value="demo">Demo</option>
+              </select>
+            </label>
+            <label>
+              <span>Маршрут</span>
+              <select name="route_id" data-route-select><option value="">Все</option></select>
+            </label>
+            <label><span>Дата от</span><input name="date_from" type="date" /></label>
+            <label><span>Дата до</span><input name="date_to" type="date" /></label>
+            <label><span>Цена от</span><input name="min_price" type="number" min="1" /></label>
+            <label><span>Цена до</span><input name="max_price" type="number" min="1" /></label>
+            <label class="toggle"><input name="direct_only" type="checkbox" /><span>Только прямые</span></label>
+            <label class="toggle"><input name="error_only" type="checkbox" /><span>Только Error Fare</span></label>
+            <button class="primary-button" type="submit">Применить</button>
+          </form>
+          <div id="resultFeedList" class="deal-list empty-state">Результаты появятся после проверки</div>
+        </section>
+
+        <section class="split-grid">
+          <div class="panel error-fare-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Аномалии</p>
+                <h2>Лента Error Fare</h2>
+              </div>
+            </div>
+            <div class="compact-filters">
+              <select id="errorFareRoute" data-route-select><option value="">Все маршруты</option></select>
+              <select id="errorFareSource">
+                <option value="">Все источники</option>
+                <option value="travelpayouts">Aviasales / Travelpayouts</option>
+                <option value="aeroflot_website">Аэрофлот</option>
+                <option value="s7_website">S7</option>
+              </select>
+            </div>
+            <div id="errorFareList" class="deal-list empty-state">Кандидатов пока нет</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Динамика</p>
+                <h2>График цены</h2>
+              </div>
+            </div>
+            <div class="compact-filters">
+              <select id="chartRoute" data-route-select><option value="">Выбери маршрут</option></select>
+              <select id="chartSource">
+                <option value="">Все источники</option>
+                <option value="travelpayouts">Aviasales / Travelpayouts</option>
+                <option value="aeroflot_website">Аэрофлот</option>
+                <option value="s7_website">S7</option>
+                <option value="demo">Demo</option>
+              </select>
+            </div>
+            <div id="priceChart" class="chart empty-state">Недостаточно данных</div>
+          </div>
         </section>
 
         <section class="panel">

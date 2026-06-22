@@ -66,6 +66,12 @@ class PriceHistoryItem(FlightDeal):
     drop_percent: float | None = None
 
 
+class VerifiedHistoryItem(PriceHistoryItem):
+    confidence: Literal["low", "medium", "high"] = "low"
+    confirmation_sources: list[str] = Field(default_factory=list)
+    repeated_checks: int = 1
+
+
 class SearchResponse(BaseModel):
     origin_code: str
     destination_code: str
@@ -86,10 +92,34 @@ class MonitorRunResult(BaseModel):
 
 class BrowserParserResponse(BaseModel):
     enabled: bool
+    online: bool = False
+    state: Literal["unknown", "idle", "running", "error"] = "unknown"
+    current_route: str | None = None
+    last_error: str | None = None
+    last_heartbeat_at: datetime | None = None
+    last_run_at: datetime | None = None
     last_received_at: datetime | None = None
     total_results: int
     source_counts: dict[str, int]
-    results: list[PriceHistoryItem]
+    results: list[VerifiedHistoryItem]
+
+
+class ResultFeedResponse(BaseModel):
+    results: list[VerifiedHistoryItem]
+
+
+class PriceChartPoint(BaseModel):
+    source: str
+    found_at: datetime
+    price: int
+
+
+class ExtensionStatusIngest(BaseModel):
+    state: Literal["idle", "running", "error"]
+    current_route: str | None = Field(default=None, max_length=200)
+    last_error: str | None = Field(default=None, max_length=1000)
+    last_run_at: datetime | None = None
+    providers: list[Literal["aeroflot", "s7"]] = Field(default_factory=list, max_length=2)
 
 
 class AeroflotDealInput(BaseModel):
@@ -123,6 +153,7 @@ class ProviderDealInput(BaseModel):
 class ProviderResultsIngest(BaseModel):
     provider: Literal["aeroflot", "s7"]
     route_id: int = Field(ge=1)
+    confirmation_attempt: int = Field(default=0, ge=0, le=2)
     results: list[ProviderDealInput] = Field(min_length=1, max_length=30)
 
     @model_validator(mode="after")
@@ -135,3 +166,7 @@ class ProviderResultsIngest(BaseModel):
         if any(not result.link.startswith(prefix) for result in self.results):
             raise ValueError(f"Ссылка результата не соответствует источнику {self.provider}")
         return self
+
+
+class ProviderIngestResponse(MonitorRunResult):
+    recheck_dates: list[date] = Field(default_factory=list)

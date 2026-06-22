@@ -1,4 +1,6 @@
 const ALARM_NAME = "direct-fare-monitor";
+const HEARTBEAT_ALARM_NAME = "direct-fare-heartbeat";
+const RECHECK_DELAY_MS = 45000;
 const DEFAULTS = {
   serverUrl: "",
   extensionToken: "",
@@ -29,22 +31,24 @@ chrome.action.onClicked.addListener(() => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  configureAlarm();
+  configureAlarms();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  configureAlarm();
+  configureAlarms();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.intervalMinutes) {
-    configureAlarm();
+    configureAlarms();
   }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) {
     runMonitor().catch(() => {});
+  } else if (alarm.name === HEARTBEAT_ALARM_NAME) {
+    sendStoredStatus();
   }
 });
 
@@ -78,13 +82,18 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
-async function configureAlarm() {
+async function configureAlarms() {
   const settings = await chrome.storage.local.get(DEFAULTS);
   const intervalMinutes = Math.max(1, Number(settings.intervalMinutes) || DEFAULTS.intervalMinutes);
   await chrome.alarms.clear(ALARM_NAME);
   chrome.alarms.create(ALARM_NAME, {
     delayInMinutes: 0.1,
     periodInMinutes: intervalMinutes,
+  });
+  await chrome.alarms.clear(HEARTBEAT_ALARM_NAME);
+  chrome.alarms.create(HEARTBEAT_ALARM_NAME, {
+    delayInMinutes: 0.1,
+    periodInMinutes: 1,
   });
 }
 
@@ -104,9 +113,11 @@ async function runMonitor() {
     const activeRoutes = routes.filter((route) => route.active);
     const enabledProviders = Object.keys(PROVIDERS).filter((provider) => settings[`${provider}Enabled`]);
     if (!enabledProviders.length) throw new Error("Включи хотя бы один прямой источник");
+    await updateMonitorState(settings, "running", null, null, null, enabledProviders);
     let sentRoutes = 0;
     let foundDeals = 0;
     const errors = [];
+    const recheckQueue = [];
 
     for (const route of activeRoutes) {
       const dates = buildDateRange(route.date_from, route.date_to);
@@ -120,7 +131,9 @@ async function runMonitor() {
       for (const provider of enabledProviders) {
         const deals = [];
         for (const departureDate of dates) {
-          await setStatus(`${PROVIDERS[provider].title}: ${route.origin} → ${route.destination}, ${departureDate}`);
+          const currentRoute = `${PROVIDERS[provider].title}: ${route.origin} → ${route.destination}, ${departureDate}`;
+          await setStatus(currentRoute);
+          await updateMonitorState(settings, "running", currentRoute, null, null, enabledProviders);
           try {
             const result = await scanDate(provider, route, departureDate);
             deals.push(...result);
@@ -135,27 +148,73 @@ async function runMonitor() {
         const bestDeals = selectBestDeals(deals, route.direct_only);
         if (!bestDeals.length) continue;
 
-        await requestJson(`${serverUrl}/api/providers/results`, {
+        const ingestResult = await requestJson(`${serverUrl}/api/providers/results`, {
           method: "POST",
           headers: { "X-Extension-Token": settings.extensionToken },
-          body: JSON.stringify({ provider, route_id: route.id, results: bestDeals }),
+          body: JSON.stringify({ provider, route_id: route.id, confirmation_attempt: 0, results: bestDeals }),
         });
+        for (const departureDate of ingestResult.recheck_dates || []) {
+          recheckQueue.push({ provider, route, departureDate });
+        }
         sentRoutes += 1;
         foundDeals += bestDeals.length;
       }
     }
 
+    foundDeals += await recheckAnomalies(recheckQueue, settings, serverUrl, enabledProviders, errors);
+
     const errorSuffix = errors.length ? `; ошибок ${errors.length}: ${errors[0]}` : "";
+    const lastRunAt = new Date().toISOString();
     await chrome.storage.local.set({
-      lastRunAt: new Date().toISOString(),
+      lastRunAt,
       lastStatus: `Готово: треков ${sentRoutes}, цен ${foundDeals}${errorSuffix}`,
     });
+    await updateMonitorState(settings, "idle", null, errors[0] || null, lastRunAt, enabledProviders);
   } catch (error) {
     await setStatus(`Ошибка: ${error.message}`);
+    const settings = await chrome.storage.local.get(DEFAULTS);
+    const providers = Object.keys(PROVIDERS).filter((provider) => settings[`${provider}Enabled`]);
+    await updateMonitorState(settings, "error", null, error.message, null, providers);
     throw error;
   } finally {
     monitorRunning = false;
   }
+}
+
+async function recheckAnomalies(queue, settings, serverUrl, enabledProviders, errors) {
+  const uniqueQueue = new Map();
+  for (const item of queue) {
+    uniqueQueue.set(`${item.provider}:${item.route.id}:${item.departureDate}`, item);
+  }
+
+  let savedDeals = 0;
+  for (const item of uniqueQueue.values()) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await delay(RECHECK_DELAY_MS);
+      const currentRoute = `Подтверждение ${attempt}/2, ${PROVIDERS[item.provider].title}: ${item.route.origin} → ${item.route.destination}, ${item.departureDate}`;
+      await setStatus(currentRoute);
+      await updateMonitorState(settings, "running", currentRoute, null, null, enabledProviders);
+      try {
+        const deals = await scanDate(item.provider, item.route, item.departureDate);
+        const bestDeals = selectBestDeals(deals, item.route.direct_only);
+        if (!bestDeals.length) continue;
+        await requestJson(`${serverUrl}/api/providers/results`, {
+          method: "POST",
+          headers: { "X-Extension-Token": settings.extensionToken },
+          body: JSON.stringify({
+            provider: item.provider,
+            route_id: item.route.id,
+            confirmation_attempt: attempt,
+            results: bestDeals,
+          }),
+        });
+        savedDeals += bestDeals.length;
+      } catch (error) {
+        errors.push(`${currentRoute}: ${error.message}`);
+      }
+    }
+  }
+  return savedDeals;
 }
 
 async function scanDate(provider, route, departureDate) {
@@ -278,4 +337,55 @@ function normalizeServerUrl(value) {
 
 async function setStatus(message) {
   await chrome.storage.local.set({ lastStatus: message });
+}
+
+async function updateMonitorState(settings, state, currentRoute, lastError, lastRunAt, providers) {
+  await chrome.storage.local.set({
+    monitorState: state,
+    currentRoute,
+    lastError,
+    heartbeatProviders: providers,
+  });
+  await reportStatus(settings, state, currentRoute, lastError, lastRunAt, providers);
+}
+
+async function sendStoredStatus() {
+  const settings = await chrome.storage.local.get({
+    ...DEFAULTS,
+    monitorState: "idle",
+    currentRoute: null,
+    lastError: null,
+    lastRunAt: null,
+    heartbeatProviders: [],
+  });
+  const providers = settings.heartbeatProviders.length
+    ? settings.heartbeatProviders
+    : Object.keys(PROVIDERS).filter((provider) => settings[`${provider}Enabled`]);
+  await reportStatus(
+    settings,
+    settings.monitorState,
+    settings.currentRoute,
+    settings.lastError,
+    settings.lastRunAt,
+    providers,
+  );
+}
+
+async function reportStatus(settings, state, currentRoute, lastError, lastRunAt, providers) {
+  const serverUrl = normalizeServerUrl(settings.serverUrl);
+  if (!serverUrl || !settings.extensionToken) return;
+  try {
+    await requestJson(`${serverUrl}/api/providers/browser/status`, {
+      method: "POST",
+      headers: { "X-Extension-Token": settings.extensionToken },
+      body: JSON.stringify({ state, current_route: currentRoute, last_error: lastError, last_run_at: lastRunAt, providers }),
+    });
+    await chrome.storage.local.remove("lastHeartbeatError");
+  } catch (error) {
+    await chrome.storage.local.set({ lastHeartbeatError: error.message });
+  }
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

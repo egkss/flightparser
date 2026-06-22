@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import hmac
 from contextlib import asynccontextmanager
+from datetime import date, datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,15 +17,20 @@ from .database import Database
 from .models import (
     AeroflotResultsIngest,
     BrowserParserResponse,
+    ExtensionStatusIngest,
     FlightDeal,
     MonitorRunResult,
+    PriceChartPoint,
+    ProviderIngestResponse,
     ProviderResultsIngest,
+    ResultFeedResponse,
     SearchRequest,
     SearchResponse,
     TrackingCreate,
 )
 from .scheduler import PriceMonitor, create_scheduler
 from .telegram_notifier import TelegramNotifier
+from .verification import dedupe_latest, enrich_results
 
 settings = get_settings()
 database = Database(settings.database_file)
@@ -112,7 +118,8 @@ async def delete_tracking(route_id: int, db: Database = Depends(get_db)) -> dict
 
 @app.get("/api/tracking/{route_id}/history")
 async def route_history(route_id: int, db: Database = Depends(get_db)):
-    return await db.history(route_id)
+    items = await db.history(route_id)
+    return enrich_results(items, await db.confirmation_context())
 
 
 @app.get("/api/providers/browser", response_model=BrowserParserResponse)
@@ -121,13 +128,88 @@ async def browser_parser_panel(
     settings_: Settings = Depends(get_settings),
 ) -> BrowserParserResponse:
     total_results, last_received_at, source_counts = await db.browser_parser_stats()
+    status = await db.extension_status()
+    last_heartbeat_at = status.get("last_heartbeat_at") if status else None
+    online = False
+    if last_heartbeat_at:
+        heartbeat = datetime.fromisoformat(last_heartbeat_at)
+        online = (datetime.now(timezone.utc) - heartbeat).total_seconds() <= 150
+    results = dedupe_latest(await db.browser_parser_results())
     return BrowserParserResponse(
         enabled=bool(settings_.extension_api_token),
+        online=online,
+        state=status.get("state", "unknown") if status else "unknown",
+        current_route=status.get("current_route") if status else None,
+        last_error=status.get("last_error") if status else None,
+        last_heartbeat_at=last_heartbeat_at,
+        last_run_at=status.get("last_run_at") if status else None,
         last_received_at=last_received_at,
         total_results=total_results,
         source_counts=source_counts,
-        results=await db.browser_parser_results(),
+        results=enrich_results(results, await db.confirmation_context()),
     )
+
+
+@app.post("/api/providers/browser/status")
+async def update_browser_parser_status(
+    payload: ExtensionStatusIngest,
+    x_extension_token: str = Header(default=""),
+    db: Database = Depends(get_db),
+    settings_: Settings = Depends(get_settings),
+) -> dict:
+    _check_extension_token(x_extension_token, settings_)
+    await db.update_extension_status(
+        payload.state,
+        payload.current_route,
+        payload.last_error,
+        payload.last_run_at.isoformat() if payload.last_run_at else None,
+        payload.providers,
+    )
+    return {"ok": True}
+
+
+@app.get("/api/results", response_model=ResultFeedResponse)
+async def result_feed(
+    source: str | None = None,
+    route_id: int | None = Query(default=None, ge=1),
+    date_from: date | None = None,
+    date_to: date | None = None,
+    min_price: int | None = Query(default=None, ge=1),
+    max_price: int | None = Query(default=None, ge=1),
+    direct_only: bool = False,
+    error_only: bool = False,
+    db: Database = Depends(get_db),
+) -> ResultFeedResponse:
+    items = await db.list_results(
+        source=source,
+        route_id=route_id,
+        date_from=date_from.isoformat() if date_from else None,
+        date_to=date_to.isoformat() if date_to else None,
+        min_price=min_price,
+        max_price=max_price,
+        direct_only=direct_only,
+        error_only=error_only,
+    )
+    return ResultFeedResponse(results=enrich_results(items, await db.confirmation_context()))
+
+
+@app.get("/api/error-fares", response_model=ResultFeedResponse)
+async def error_fare_feed(
+    source: str | None = None,
+    route_id: int | None = Query(default=None, ge=1),
+    db: Database = Depends(get_db),
+) -> ResultFeedResponse:
+    items = dedupe_latest(await db.list_results(source=source, route_id=route_id, error_only=True))
+    return ResultFeedResponse(results=enrich_results(items, await db.confirmation_context()))
+
+
+@app.get("/api/price-chart", response_model=list[PriceChartPoint])
+async def price_chart(
+    route_id: int = Query(ge=1),
+    source: str | None = None,
+    db: Database = Depends(get_db),
+) -> list[PriceChartPoint]:
+    return [PriceChartPoint(**item) for item in await db.price_chart(route_id, source)]
 
 
 @app.post("/api/monitor/run", response_model=MonitorRunResult)
@@ -150,13 +232,13 @@ async def ingest_aeroflot_results(
     return await _ingest_provider_results(generic_payload, x_extension_token, db, settings_)
 
 
-@app.post("/api/providers/results", response_model=MonitorRunResult)
+@app.post("/api/providers/results", response_model=ProviderIngestResponse)
 async def ingest_provider_results(
     payload: ProviderResultsIngest,
     x_extension_token: str = Header(default=""),
     db: Database = Depends(get_db),
     settings_: Settings = Depends(get_settings),
-) -> MonitorRunResult:
+) -> ProviderIngestResponse:
     return await _ingest_provider_results(payload, x_extension_token, db, settings_)
 
 
@@ -165,11 +247,8 @@ async def _ingest_provider_results(
     extension_token: str,
     db: Database,
     settings_: Settings,
-) -> MonitorRunResult:
-    if not settings_.extension_api_token:
-        raise HTTPException(status_code=503, detail="Приём данных расширения не настроен")
-    if not hmac.compare_digest(extension_token, settings_.extension_api_token):
-        raise HTTPException(status_code=401, detail="Неверный токен расширения")
+) -> ProviderIngestResponse:
+    _check_extension_token(extension_token, settings_)
 
     route = await db.get_route(payload.route_id)
     if route is None or not route.active:
@@ -200,16 +279,32 @@ async def _ingest_provider_results(
                 baggage="unknown",
                 link=item.link,
                 source=source,
-                raw={"extension": True, "provider": payload.provider},
+                raw={
+                    "extension": True,
+                    "provider": payload.provider,
+                    "confirmation_attempt": payload.confirmation_attempt,
+                },
             )
         )
 
-    saved_items, sent_notifications = await monitor.ingest_deals(route, deals[:3])
-    return MonitorRunResult(
-        checked_routes=1,
-        saved_items=saved_items,
-        sent_notifications=sent_notifications,
+    outcome = await monitor.ingest_deals(
+        route,
+        deals[:3],
+        allow_notifications=payload.confirmation_attempt == 0,
     )
+    return ProviderIngestResponse(
+        checked_routes=1,
+        saved_items=outcome.saved_items,
+        sent_notifications=outcome.sent_notifications,
+        recheck_dates=outcome.error_dates if payload.confirmation_attempt == 0 else [],
+    )
+
+
+def _check_extension_token(extension_token: str, settings_: Settings) -> None:
+    if not settings_.extension_api_token:
+        raise HTTPException(status_code=503, detail="Приём данных расширения не настроен")
+    if not hmac.compare_digest(extension_token, settings_.extension_api_token):
+        raise HTTPException(status_code=401, detail="Неверный токен расширения")
 
 
 def _resolve_codes(origin: str, destination: str) -> tuple[str, str]:

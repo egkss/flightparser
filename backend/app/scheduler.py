@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass
+from datetime import date
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from .analyzer import analyze_deal
@@ -8,6 +12,13 @@ from .config import Settings
 from .database import Database
 from .models import FlightDeal, MonitorRunResult, SearchRequest, TrackingRoute
 from .telegram_notifier import TelegramNotifier
+
+
+@dataclass(frozen=True)
+class IngestOutcome:
+    saved_items: int
+    sent_notifications: int
+    error_dates: list[date]
 
 
 class PriceMonitor:
@@ -40,9 +51,11 @@ class PriceMonitor:
                 notify_error_fare=route.notify_error_fare,
             )
             deals = await self.client.search_window(request, route.origin_code, route.destination_code)
-            saved, sent = await self.ingest_deals(route, deals[:3])
-            saved_items += saved
-            sent_notifications += sent
+            outcome = await self.ingest_deals(route, deals[:3])
+            saved_items += outcome.saved_items
+            sent_notifications += outcome.sent_notifications
+            if outcome.error_dates:
+                saved_items += await self._recheck_error_fares(route, request, outcome.error_dates)
 
         return MonitorRunResult(
             checked_routes=len(routes),
@@ -50,9 +63,16 @@ class PriceMonitor:
             sent_notifications=sent_notifications,
         )
 
-    async def ingest_deals(self, route: TrackingRoute, deals: list[FlightDeal]) -> tuple[int, int]:
+    async def ingest_deals(
+        self,
+        route: TrackingRoute,
+        deals: list[FlightDeal],
+        allow_notifications: bool = True,
+    ) -> IngestOutcome:
         notification_payload = []
+        notification_fingerprints = []
         saved_items = 0
+        error_dates: set[date] = set()
 
         for deal in deals:
             baseline = await self.database.baseline_stats(route.id)
@@ -70,16 +90,49 @@ class PriceMonitor:
                 drop_percent=analysis.drop_percent,
             )
             saved_items += 1
-            if analysis.should_notify:
+            if analysis.is_error_fare:
+                error_dates.add(deal.depart_date)
+            if allow_notifications and analysis.should_notify:
+                fingerprint = self._notification_fingerprint(route, deal)
+                if await self.database.notification_was_sent(fingerprint):
+                    continue
                 notification_payload.append(
                     (deal, analysis.drop_percent, analysis.is_error_fare, analysis.reasons)
                 )
+                notification_fingerprints.append(fingerprint)
 
         sent_notifications = 0
         if notification_payload:
             did_send = await self.notifier.send_deals(route, notification_payload[:3])
             sent_notifications = int(did_send)
-        return saved_items, sent_notifications
+            if did_send:
+                for fingerprint in notification_fingerprints[:3]:
+                    await self.database.mark_notification_sent(fingerprint)
+        return IngestOutcome(saved_items, sent_notifications, sorted(error_dates))
+
+    async def _recheck_error_fares(
+        self,
+        route: TrackingRoute,
+        request: SearchRequest,
+        error_dates: list[date],
+    ) -> int:
+        saved_items = 0
+        for attempt in range(1, 3):
+            await asyncio.sleep(max(0, self.settings.error_fare_recheck_seconds))
+            deals = await self.client.search_window(request, route.origin_code, route.destination_code)
+            confirmation_deals = [
+                deal.model_copy(update={"raw": {**deal.raw, "confirmation_attempt": attempt}})
+                for deal in deals
+                if deal.depart_date in error_dates
+            ]
+            outcome = await self.ingest_deals(route, confirmation_deals[:3], allow_notifications=False)
+            saved_items += outcome.saved_items
+        return saved_items
+
+    @staticmethod
+    def _notification_fingerprint(route: TrackingRoute, deal: FlightDeal) -> str:
+        flight_key = deal.flight_number or deal.airline or deal.source
+        return f"{route.id}:{deal.depart_date.isoformat()}:{flight_key}:{deal.price}"
 
 
 def create_scheduler(monitor: PriceMonitor, settings: Settings) -> AsyncIOScheduler:

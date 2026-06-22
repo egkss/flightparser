@@ -54,9 +54,20 @@ class TelegramNotifier:
                         f"{index}. <b>{marker}</b>",
                         f"Цена: <b>{deal.price:,} RUB</b>{drop_text}".replace(",", " "),
                         f"Дата: {deal.depart_date.isoformat()}",
+                        f"Источник: {html.escape(self._source_title(deal.source))}",
+                        f"Рейс: {html.escape(deal.flight_number or deal.airline or 'не указан')}",
                         f"Причина: {html.escape(reasons_text)}",
                         f"<a href=\"{html.escape(deal.link)}\">Открыть билет</a>",
                     ]
                 )
             )
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _source_title(source: str) -> str:
+        return {
+            "travelpayouts": "Aviasales / Travelpayouts",
+            "aeroflot_website": "Аэрофлот · сайт",
+            "s7_website": "S7 · сайт",
+            "demo": "Demo-данные",
+        }.get(source, source)

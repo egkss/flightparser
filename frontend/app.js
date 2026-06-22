@@ -8,6 +8,10 @@ const historyList = document.querySelector("#historyList");
 const historyTitle = document.querySelector("#historyTitle");
 const browserParserList = document.querySelector("#browserParserList");
 const refreshBrowserParserButton = document.querySelector("#refreshBrowserParserButton");
+const resultFilters = document.querySelector("#resultFilters");
+const resultFeedList = document.querySelector("#resultFeedList");
+const errorFareList = document.querySelector("#errorFareList");
+const priceChart = document.querySelector("#priceChart");
 
 function formatMoney(value) {
   if (value === null || value === undefined) return "нет данных";
@@ -117,7 +121,11 @@ function renderHistory(items) {
         <article class="history-item">
           <div class="history-top">
             <strong>${formatMoney(item.price)}</strong>
-            ${item.is_error_fare ? '<span class="badge">ERROR FARE -30%</span>' : ""}
+            <div class="deal-actions">
+              ${renderSourceBadge(item.source)}
+              ${renderConfidenceBadge(item.confidence)}
+              ${item.is_error_fare ? '<span class="badge">ERROR FARE</span>' : ""}
+            </div>
           </div>
           <div class="meta">${formatDate(item.depart_date)} · найдено ${new Date(item.found_at).toLocaleString("ru-RU")}</div>
           <div class="meta">Источник: ${formatSource(item.source)}${item.flight_number ? ` · ${item.flight_number}` : ""}</div>
@@ -151,41 +159,44 @@ function renderSourceBadge(source) {
   return `<span class="source-badge ${sourceClass(source)}">${formatSource(source)}</span>`;
 }
 
-function renderBrowserParser(data) {
-  document.querySelector("#browserParserStatus").textContent = data.enabled ? "приём включён" : "токен не настроен";
-  document.querySelector("#browserParserSidebarStatus").textContent = data.enabled ? "включён" : "выключен";
-  document.querySelector("#browserParserLastReceived").textContent = data.last_received_at
-    ? new Date(data.last_received_at).toLocaleString("ru-RU")
-    : "данных ещё нет";
-  document.querySelector("#browserParserTotal").textContent = data.total_results;
+function formatConfidence(confidence) {
+  return {
+    high: "Высокая уверенность",
+    medium: "Средняя уверенность",
+    low: "Нужна проверка",
+  }[confidence] || "Нужна проверка";
+}
 
-  const sourceEntries = Object.entries(data.source_counts);
-  const sourceSummary = document.querySelector("#browserParserSources");
-  sourceSummary.innerHTML = sourceEntries.length
-    ? sourceEntries.map(([source, count]) => `${renderSourceBadge(source)} <strong>${count}</strong>`).join("")
-    : "";
+function renderConfidenceBadge(confidence) {
+  return `<span class="confidence-badge confidence-${confidence}">${formatConfidence(confidence)}</span>`;
+}
 
-  if (!data.results.length) {
-    browserParserList.className = "deal-list empty-state";
-    browserParserList.textContent = "Данных от расширения пока нет";
+function renderVerifiedResults(container, items, emptyText) {
+  if (!items.length) {
+    container.className = "deal-list empty-state";
+    container.textContent = emptyText;
     return;
   }
 
-  browserParserList.className = "deal-list browser-deal-list";
-  browserParserList.innerHTML = data.results
+  container.className = "deal-list verified-deal-list";
+  container.innerHTML = items
     .map(
       (item) => `
-        <article class="deal browser-deal">
+        <article class="deal verified-deal">
           <div class="deal-top">
             <strong class="price">${formatMoney(item.price)}</strong>
-            ${renderSourceBadge(item.source)}
+            <div class="deal-actions">
+              ${renderSourceBadge(item.source)}
+              ${renderConfidenceBadge(item.confidence)}
+            </div>
           </div>
           <strong>${item.origin} → ${item.destination}</strong>
           <div class="meta">${formatDate(item.depart_date)} · ${item.flight_number || item.airline || "рейс не указан"} · пересадок: ${item.transfers}</div>
-          <div class="meta">Получено: ${new Date(item.found_at).toLocaleString("ru-RU")}</div>
+          <div class="meta">Подтверждений: ${item.repeated_checks} · источников: ${item.confirmation_sources.map(formatSource).join(", ") || formatSource(item.source)}</div>
+          <div class="meta">Получено: ${new Date(item.found_at).toLocaleString("ru-RU")}${item.drop_percent === null ? "" : ` · падение ${item.drop_percent}%`}</div>
           <div class="deal-actions">
-            ${item.is_error_fare ? '<span class="badge">ERROR FARE -30%</span>' : ""}
-            <a href="${item.link}" target="_blank" rel="noreferrer">Открыть у авиакомпании</a>
+            ${item.is_error_fare ? '<span class="badge">ERROR FARE</span>' : ""}
+            <a href="${item.link}" target="_blank" rel="noreferrer">Купить билет</a>
           </div>
         </article>
       `,
@@ -193,9 +204,130 @@ function renderBrowserParser(data) {
     .join("");
 }
 
+function renderBrowserParser(data) {
+  const statusText = !data.enabled
+    ? "токен не настроен"
+    : data.online
+      ? data.state === "running" ? "работает" : data.state === "error" ? "ошибка" : "на связи"
+      : "нет heartbeat";
+  document.querySelector("#browserParserStatus").textContent = statusText;
+  document.querySelector("#browserParserSidebarStatus").textContent = data.online ? "на связи" : data.enabled ? "не в сети" : "выключен";
+  document.querySelector("#browserParserLastReceived").textContent = data.last_received_at
+    ? new Date(data.last_received_at).toLocaleString("ru-RU")
+    : "данных ещё нет";
+  document.querySelector("#browserParserTotal").textContent = data.total_results;
+  document.querySelector("#browserParserHeartbeat").textContent = data.last_heartbeat_at
+    ? new Date(data.last_heartbeat_at).toLocaleString("ru-RU")
+    : "не получен";
+  document.querySelector("#browserParserCurrentRoute").textContent = data.current_route
+    ? `Сейчас: ${data.current_route}`
+    : data.last_run_at ? `Последний запуск: ${new Date(data.last_run_at).toLocaleString("ru-RU")}` : "";
+  document.querySelector("#browserParserError").textContent = data.last_error ? `Последняя ошибка: ${data.last_error}` : "";
+
+  const sourceEntries = Object.entries(data.source_counts);
+  const sourceSummary = document.querySelector("#browserParserSources");
+  sourceSummary.innerHTML = sourceEntries.length
+    ? sourceEntries.map(([source, count]) => `${renderSourceBadge(source)} <strong>${count}</strong>`).join("")
+    : "";
+
+  renderVerifiedResults(browserParserList, data.results, "Данных от расширения пока нет");
+}
+
 async function loadBrowserParser() {
   const data = await requestJson("/api/providers/browser");
   renderBrowserParser(data);
+}
+
+async function loadResultFeed() {
+  const form = new FormData(resultFilters);
+  const params = new URLSearchParams();
+  for (const name of ["source", "route_id", "date_from", "date_to", "min_price", "max_price"]) {
+    const value = String(form.get(name) || "");
+    if (value) params.set(name, value);
+  }
+  if (form.get("direct_only") === "on") params.set("direct_only", "true");
+  if (form.get("error_only") === "on") params.set("error_only", "true");
+  const data = await requestJson(`/api/results?${params}`);
+  renderVerifiedResults(resultFeedList, data.results, "По выбранным фильтрам результатов нет");
+}
+
+async function loadErrorFares() {
+  const params = new URLSearchParams();
+  const routeId = document.querySelector("#errorFareRoute").value;
+  const source = document.querySelector("#errorFareSource").value;
+  if (routeId) params.set("route_id", routeId);
+  if (source) params.set("source", source);
+  const data = await requestJson(`/api/error-fares?${params}`);
+  renderVerifiedResults(errorFareList, data.results, "Подтверждённых кандидатов Error Fare пока нет");
+}
+
+async function loadPriceChart() {
+  const routeId = document.querySelector("#chartRoute").value;
+  if (!routeId) {
+    priceChart.className = "chart empty-state";
+    priceChart.textContent = "Выбери маршрут";
+    return;
+  }
+  const params = new URLSearchParams({ route_id: routeId });
+  const source = document.querySelector("#chartSource").value;
+  if (source) params.set("source", source);
+  renderPriceChart(await requestJson(`/api/price-chart?${params}`));
+}
+
+function renderPriceChart(points) {
+  if (points.length < 2) {
+    priceChart.className = "chart empty-state";
+    priceChart.textContent = "Для графика нужно минимум две цены";
+    return;
+  }
+
+  const width = 760;
+  const height = 260;
+  const padding = 42;
+  const prices = points.map((point) => point.price);
+  const times = points.map((point) => new Date(point.found_at).getTime());
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const colors = {
+    travelpayouts: "#1593bd",
+    aeroflot_website: "#2970b8",
+    s7_website: "#65a832",
+    demo: "#9a7c2f",
+  };
+  const grouped = points.reduce((result, point) => {
+    (result[point.source] ||= []).push(point);
+    return result;
+  }, {});
+  const lines = Object.entries(grouped)
+    .map(([source, sourcePoints]) => {
+      const coordinates = sourcePoints
+        .map((point) => {
+          const time = new Date(point.found_at).getTime();
+          const x = padding + ((time - minTime) / Math.max(1, maxTime - minTime)) * (width - padding * 2);
+          const y = height - padding - ((point.price - minPrice) / Math.max(1, maxPrice - minPrice)) * (height - padding * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        })
+        .join(" ");
+      return `<polyline points="${coordinates}" fill="none" stroke="${colors[source] || "#667074"}" stroke-width="3" />`;
+    })
+    .join("");
+  const legend = Object.keys(grouped)
+    .map((source) => `<span style="--legend-color:${colors[source] || "#667074"}">${formatSource(source)}</span>`)
+    .join("");
+
+  priceChart.className = "chart";
+  priceChart.innerHTML = `
+    <div class="chart-legend">${legend}</div>
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="График изменения цены">
+      <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" class="chart-axis" />
+      <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" class="chart-axis" />
+      <text x="4" y="${padding + 4}">${formatMoney(maxPrice)}</text>
+      <text x="4" y="${height - padding}">${formatMoney(minPrice)}</text>
+      ${lines}
+    </svg>
+  `;
 }
 
 function renderBrowserParserError(error) {
@@ -214,6 +346,20 @@ async function loadHealth() {
 async function loadTracks() {
   const routes = await requestJson("/api/tracking");
   renderTracks(routes);
+  populateRouteSelects(routes);
+}
+
+function populateRouteSelects(routes) {
+  document.querySelectorAll("[data-route-select]").forEach((select) => {
+    const currentValue = select.value;
+    const firstOption = select.options[0].outerHTML;
+    select.innerHTML = firstOption + routes
+      .map((route) => `<option value="${route.id}">${route.origin} → ${route.destination}</option>`)
+      .join("");
+    select.value = currentValue && routes.some((route) => String(route.id) === currentValue) ? currentValue : "";
+  });
+  const chartRoute = document.querySelector("#chartRoute");
+  if (!chartRoute.value && routes.length) chartRoute.value = String(routes[0].id);
 }
 
 async function loadHistory(routeId, title) {
@@ -259,6 +405,7 @@ runMonitorButton.addEventListener("click", async () => {
   try {
     const result = await requestJson("/api/monitor/run", { method: "POST" });
     await loadTracks();
+    await Promise.all([loadResultFeed(), loadErrorFares(), loadPriceChart()]);
     setMessage(`Проверено треков: ${result.checked_routes}, сохранено цен: ${result.saved_items}`);
   } catch (error) {
     setMessage(error.message, true);
@@ -278,6 +425,31 @@ refreshBrowserParserButton.addEventListener("click", async () => {
     refreshBrowserParserButton.disabled = false;
   }
 });
+
+resultFilters.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await loadResultFeed();
+  } catch (error) {
+    resultFeedList.className = "deal-list empty-state";
+    resultFeedList.textContent = `Ошибка фильтра: ${error.message}`;
+  }
+});
+
+document.querySelector("#errorFareRoute").addEventListener("change", () => loadErrorFares().catch(renderErrorFareError));
+document.querySelector("#errorFareSource").addEventListener("change", () => loadErrorFares().catch(renderErrorFareError));
+document.querySelector("#chartRoute").addEventListener("change", () => loadPriceChart().catch(renderChartError));
+document.querySelector("#chartSource").addEventListener("change", () => loadPriceChart().catch(renderChartError));
+
+function renderErrorFareError(error) {
+  errorFareList.className = "deal-list empty-state";
+  errorFareList.textContent = `Ошибка обновления: ${error.message}`;
+}
+
+function renderChartError(error) {
+  priceChart.className = "chart empty-state";
+  priceChart.textContent = `Ошибка графика: ${error.message}`;
+}
 
 trackingList.addEventListener("click", async (event) => {
   const target = event.target;
@@ -304,8 +476,14 @@ function setDefaultDates() {
   searchForm.elements.date_to.value = to.toISOString().slice(0, 10);
 }
 
-setDefaultDates();
-loadHealth().catch((error) => setMessage(error.message, true));
-loadTracks().catch((error) => setMessage(error.message, true));
-loadBrowserParser().catch(renderBrowserParserError);
-setInterval(() => loadBrowserParser().catch(renderBrowserParserError), 30000);
+async function initialize() {
+  setDefaultDates();
+  await Promise.all([loadHealth(), loadTracks()]);
+  await Promise.all([loadBrowserParser(), loadResultFeed(), loadErrorFares(), loadPriceChart()]);
+}
+
+initialize().catch((error) => setMessage(error.message, true));
+setInterval(() => {
+  loadBrowserParser().catch(renderBrowserParserError);
+  loadErrorFares().catch(renderErrorFareError);
+}, 30000);

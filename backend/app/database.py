@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -76,6 +76,21 @@ class Database:
 
                 CREATE INDEX IF NOT EXISTS idx_price_history_route_date
                     ON price_history(route_id, depart_date, found_at);
+
+                CREATE TABLE IF NOT EXISTS notification_events (
+                    fingerprint TEXT PRIMARY KEY,
+                    sent_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS browser_extension_status (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    state TEXT NOT NULL,
+                    current_route TEXT,
+                    last_error TEXT,
+                    last_heartbeat_at TEXT NOT NULL,
+                    last_run_at TEXT,
+                    providers_json TEXT NOT NULL DEFAULT '[]'
+                );
                 """
             )
             await db.commit()
@@ -217,6 +232,136 @@ class Database:
             )
             rows = await cursor.fetchall()
         return [self._history_from_row(row) for row in rows]
+
+    async def list_results(
+        self,
+        source: str | None = None,
+        route_id: int | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        min_price: int | None = None,
+        max_price: int | None = None,
+        direct_only: bool = False,
+        error_only: bool = False,
+        limit: int = 100,
+    ) -> list[PriceHistoryItem]:
+        clauses = []
+        values: list[Any] = []
+        if source:
+            clauses.append("source = ?")
+            values.append(source)
+        if route_id is not None:
+            clauses.append("route_id = ?")
+            values.append(route_id)
+        if date_from:
+            clauses.append("depart_date >= ?")
+            values.append(date_from)
+        if date_to:
+            clauses.append("depart_date <= ?")
+            values.append(date_to)
+        if min_price is not None:
+            clauses.append("price >= ?")
+            values.append(min_price)
+        if max_price is not None:
+            clauses.append("price <= ?")
+            values.append(max_price)
+        if direct_only:
+            clauses.append("transfers = 0")
+        if error_only:
+            clauses.append("is_error_fare = 1")
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        values.append(limit)
+
+        async with self.connect() as db:
+            cursor = await db.execute(
+                f"SELECT * FROM price_history {where} ORDER BY found_at DESC LIMIT ?",
+                values,
+            )
+            rows = await cursor.fetchall()
+        return [self._history_from_row(row) for row in rows]
+
+    async def confirmation_context(self, hours: int = 24, limit: int = 1000) -> list[PriceHistoryItem]:
+        since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        async with self.connect() as db:
+            cursor = await db.execute(
+                """
+                SELECT * FROM price_history
+                WHERE found_at >= ?
+                ORDER BY found_at DESC
+                LIMIT ?
+                """,
+                (since, limit),
+            )
+            rows = await cursor.fetchall()
+        return [self._history_from_row(row) for row in rows]
+
+    async def price_chart(self, route_id: int, source: str | None = None, limit: int = 300) -> list[dict[str, Any]]:
+        source_clause = "AND source = ?" if source else ""
+        values: list[Any] = [route_id]
+        if source:
+            values.append(source)
+        values.append(limit)
+        async with self.connect() as db:
+            cursor = await db.execute(
+                f"""
+                SELECT source, found_at, price
+                FROM price_history
+                WHERE route_id = ? {source_clause}
+                ORDER BY found_at ASC
+                LIMIT ?
+                """,
+                values,
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def notification_was_sent(self, fingerprint: str) -> bool:
+        async with self.connect() as db:
+            cursor = await db.execute(
+                "SELECT 1 FROM notification_events WHERE fingerprint = ?",
+                (fingerprint,),
+            )
+            return await cursor.fetchone() is not None
+
+    async def mark_notification_sent(self, fingerprint: str) -> None:
+        async with self.connect() as db:
+            await db.execute(
+                "INSERT OR IGNORE INTO notification_events (fingerprint, sent_at) VALUES (?, ?)",
+                (fingerprint, utc_now()),
+            )
+            await db.commit()
+
+    async def update_extension_status(
+        self,
+        state: str,
+        current_route: str | None,
+        last_error: str | None,
+        last_run_at: str | None,
+        providers: list[str],
+    ) -> None:
+        async with self.connect() as db:
+            await db.execute(
+                """
+                INSERT INTO browser_extension_status (
+                    id, state, current_route, last_error, last_heartbeat_at, last_run_at, providers_json
+                ) VALUES (1, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    state = excluded.state,
+                    current_route = excluded.current_route,
+                    last_error = excluded.last_error,
+                    last_heartbeat_at = excluded.last_heartbeat_at,
+                    last_run_at = COALESCE(excluded.last_run_at, browser_extension_status.last_run_at),
+                    providers_json = excluded.providers_json
+                """,
+                (state, current_route, last_error, utc_now(), last_run_at, json.dumps(providers)),
+            )
+            await db.commit()
+
+    async def extension_status(self) -> dict[str, Any] | None:
+        async with self.connect() as db:
+            cursor = await db.execute("SELECT * FROM browser_extension_status WHERE id = 1")
+            row = await cursor.fetchone()
+        return dict(row) if row else None
 
     async def browser_parser_stats(self) -> tuple[int, str | None, dict[str, int]]:
         async with self.connect() as db:

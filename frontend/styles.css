@@ -27,7 +27,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -143,7 +144,8 @@ label span {
   font-weight: 700;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -154,7 +156,8 @@ input {
   outline: none;
 }
 
-input:focus {
+input:focus,
+select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(18, 107, 95, 0.16);
 }
@@ -291,13 +294,36 @@ input:focus {
   background: #f4ebcd;
 }
 
+.confidence-badge {
+  width: max-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.confidence-high {
+  color: #18551d;
+  background: #dcefdc;
+}
+
+.confidence-medium {
+  color: #6b4a00;
+  background: #f7e8bc;
+}
+
+.confidence-low {
+  color: #7c3025;
+  background: #f6dfdb;
+}
+
 .browser-parser-panel {
   border-color: rgba(18, 107, 95, 0.38);
 }
 
 .parser-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -321,8 +347,72 @@ input:focus {
   margin-bottom: 12px;
 }
 
-.browser-deal-list {
+.browser-deal-list,
+.verified-deal-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.error-message {
+  color: var(--warn);
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.compact-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.error-fare-panel {
+  border-color: rgba(197, 139, 29, 0.5);
+}
+
+.chart {
+  min-height: 280px;
+  overflow: hidden;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  min-width: 480px;
+}
+
+.chart text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.chart-axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chart-legend span::before {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  background: var(--legend-color);
+  border-radius: 50%;
+  content: "";
 }
 
 .price {
@@ -378,8 +468,14 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .browser-deal-list {
+  .browser-deal-list,
+  .verified-deal-list {
     grid-template-columns: 1fr;
+  }
+
+  .filter-grid,
+  .parser-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -398,6 +494,11 @@ a {
   }
 
   .parser-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-grid,
+  .compact-filters {
     grid-template-columns: 1fr;
   }
 

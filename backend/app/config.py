@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     check_interval_minutes: int = 30
     telegram_drop_percent: float = 3.0
     error_fare_percent: float = 30.0
+    error_fare_recheck_seconds: int = 45
     public_base_url: str = "http://localhost:8000"
 
     @property
