@@ -338,7 +338,9 @@ function renderBrowserParserError(error) {
 async function loadHealth() {
   const health = await requestJson("/api/health");
   document.querySelector("#sourceStatus").textContent = formatSource(health.source);
-  document.querySelector("#telegramStatus").textContent = health.telegram_enabled ? "включен" : "выключен";
+  document.querySelector("#telegramStatus").textContent = health.telegram_enabled
+    ? health.telegram_proxy_enabled ? "включен · VLESS" : "включен · напрямую"
+    : "выключен";
   document.querySelector("#intervalStatus").textContent = `${health.check_interval_minutes} мин`;
   document.querySelector("#browserParserSidebarStatus").textContent = health.extension_enabled ? "включён" : "выключен";
 }

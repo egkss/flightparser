@@ -86,6 +86,7 @@ async def health(settings_: Settings = Depends(get_settings)) -> dict:
         "ok": True,
         "source": "travelpayouts" if settings_.travelpayouts_token else "demo",
         "telegram_enabled": bool(settings_.telegram_bot_token and settings_.telegram_chat_id),
+        "telegram_proxy_enabled": bool(settings_.telegram_proxy_url),
         "extension_enabled": bool(settings_.extension_api_token),
         "check_interval_minutes": settings_.check_interval_minutes,
     }

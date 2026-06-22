@@ -13,9 +13,10 @@ class Settings(BaseSettings):
     travelpayouts_marker: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    telegram_proxy_url: str = ""
     extension_api_token: str = ""
     check_interval_minutes: int = 30
-    telegram_drop_percent: float = 3.0
+    telegram_drop_percent: float = 5.0
     error_fare_percent: float = 30.0
     error_fare_recheck_seconds: int = 45
     public_base_url: str = "http://localhost:8000"

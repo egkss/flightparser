@@ -9,3 +9,27 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+
+  xray-config:
+    profiles: ["telegram-vless"]
+    build: .
+    restart: "no"
+    env_file:
+      - .env
+    command: ["python", "/app/deploy/build_xray_config.py", "/xray/config.json"]
+    volumes:
+      - xray-config:/xray
+
+  xray:
+    profiles: ["telegram-vless"]
+    image: ghcr.io/xtls/xray-core:26.6.1
+    restart: unless-stopped
+    depends_on:
+      xray-config:
+        condition: service_completed_successfully
+    command: ["run", "-config", "/etc/xray/config.json"]
+    volumes:
+      - xray-config:/etc/xray:ro
+
+volumes:
+  xray-config:

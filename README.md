@@ -77,9 +77,11 @@ TRAVELPAYOUTS_TOKEN=your_token
 TRAVELPAYOUTS_MARKER=your_marker
 TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
+TELEGRAM_PROXY_URL=
+VLESS_URL=
 EXTENSION_API_TOKEN=long_random_token
 CHECK_INTERVAL_MINUTES=30
-TELEGRAM_DROP_PERCENT=3
+TELEGRAM_DROP_PERCENT=5
 ERROR_FARE_PERCENT=30
 ERROR_FARE_RECHECK_SECONDS=45
 DATABASE_PATH=data/aviaparser.db
@@ -149,6 +151,33 @@ uvicorn backend.app.main:app --reload
 5. Открыть порт `8000` или поставить reverse proxy.
 
 Для первого запуска аккаунты в вебе не используются. Если панель будет доступна из интернета, лучше закрыть ее через reverse proxy с Basic Auth, VPN или доступом по IP.
+
+## Telegram через VLESS
+
+Telegram может работать через отдельный Xray-контейнер. Только запросы Telegram используют этот прокси; поиск билетов и веб-панель продолжают работать напрямую.
+
+В `.env` укажи VLESS-ссылку в кавычках и внутренний адрес прокси:
+
+```env
+TELEGRAM_DROP_PERCENT=5
+TELEGRAM_PROXY_URL=http://xray:1080
+VLESS_URL='vless://...'
+```
+
+Запусти профиль VLESS:
+
+```bash
+docker compose --profile telegram-vless up -d --build
+```
+
+Проверка контейнеров:
+
+```bash
+docker compose --profile telegram-vless ps
+docker compose logs --tail=50 xray
+```
+
+Конфигурация Xray создаётся из `VLESS_URL` при запуске и хранится в Docker volume, а не в Git. Используется официальный образ Xray-core, закреплённый на конкретной версии.
 
 ## Мониторинг сайтов авиакомпаний через Chrome
 

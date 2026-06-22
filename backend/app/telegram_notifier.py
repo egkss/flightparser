@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import html
 
 import httpx
@@ -32,9 +33,19 @@ class TelegramNotifier:
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
         }
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            proxy=self.settings.telegram_proxy_url or None,
+        ) as client:
+            for attempt in range(3):
+                try:
+                    response = await client.post(url, json=payload)
+                    response.raise_for_status()
+                    break
+                except httpx.TransportError:
+                    if attempt == 2:
+                        raise
+                    await asyncio.sleep(2)
         return True
 
     def _format_message(
