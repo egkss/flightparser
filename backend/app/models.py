@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -102,3 +102,28 @@ class AeroflotDealInput(BaseModel):
 class AeroflotResultsIngest(BaseModel):
     route_id: int = Field(ge=1)
     results: list[AeroflotDealInput] = Field(min_length=1, max_length=30)
+
+
+class ProviderDealInput(BaseModel):
+    depart_date: date
+    price: int = Field(ge=1)
+    flight_number: str | None = Field(default=None, max_length=80)
+    transfers: int = Field(default=0, ge=0, le=4)
+    link: str = Field(min_length=1, max_length=2000)
+
+
+class ProviderResultsIngest(BaseModel):
+    provider: Literal["aeroflot", "s7"]
+    route_id: int = Field(ge=1)
+    results: list[ProviderDealInput] = Field(min_length=1, max_length=30)
+
+    @model_validator(mode="after")
+    def validate_result_links(self) -> "ProviderResultsIngest":
+        allowed_prefixes = {
+            "aeroflot": "https://www.aeroflot.ru/",
+            "s7": "https://ibe.s7.ru/",
+        }
+        prefix = allowed_prefixes[self.provider]
+        if any(not result.link.startswith(prefix) for result in self.results):
+            raise ValueError(f"Ссылка результата не соответствует источнику {self.provider}")
+        return self

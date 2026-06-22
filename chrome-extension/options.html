@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Aviaparser Aeroflot Monitor</title>
+    <title>Aviaparser Direct Monitor</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <main>
-      <h1>Aviaparser Aeroflot Monitor</h1>
+      <h1>Aviaparser Direct Monitor</h1>
       <p>Chrome должен быть запущен во время мониторинга.</p>
 
       <form id="settingsForm">
@@ -27,6 +27,12 @@
         <label>
           <span>Максимальное окно трека, дней</span>
           <input id="maxWindowDays" type="number" min="1" max="31" required />
+        </label>
+        <label>
+          <span><input id="aeroflotEnabled" type="checkbox" /> Аэрофлот</span>
+        </label>
+        <label>
+          <span><input id="s7Enabled" type="checkbox" /> S7</span>
         </label>
 
         <div class="actions">

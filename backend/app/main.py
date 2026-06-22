@@ -17,6 +17,7 @@ from .models import (
     AeroflotResultsIngest,
     FlightDeal,
     MonitorRunResult,
+    ProviderResultsIngest,
     SearchRequest,
     SearchResponse,
     TrackingCreate,
@@ -125,15 +126,44 @@ async def ingest_aeroflot_results(
     db: Database = Depends(get_db),
     settings_: Settings = Depends(get_settings),
 ) -> MonitorRunResult:
+    generic_payload = ProviderResultsIngest(
+        provider="aeroflot",
+        route_id=payload.route_id,
+        results=[item.model_dump() for item in payload.results],
+    )
+    return await _ingest_provider_results(generic_payload, x_extension_token, db, settings_)
+
+
+@app.post("/api/providers/results", response_model=MonitorRunResult)
+async def ingest_provider_results(
+    payload: ProviderResultsIngest,
+    x_extension_token: str = Header(default=""),
+    db: Database = Depends(get_db),
+    settings_: Settings = Depends(get_settings),
+) -> MonitorRunResult:
+    return await _ingest_provider_results(payload, x_extension_token, db, settings_)
+
+
+async def _ingest_provider_results(
+    payload: ProviderResultsIngest,
+    extension_token: str,
+    db: Database,
+    settings_: Settings,
+) -> MonitorRunResult:
     if not settings_.extension_api_token:
         raise HTTPException(status_code=503, detail="Приём данных расширения не настроен")
-    if not hmac.compare_digest(x_extension_token, settings_.extension_api_token):
+    if not hmac.compare_digest(extension_token, settings_.extension_api_token):
         raise HTTPException(status_code=401, detail="Неверный токен расширения")
 
     route = await db.get_route(payload.route_id)
     if route is None or not route.active:
         raise HTTPException(status_code=404, detail="Активный трек не найден")
 
+    provider_settings = {
+        "aeroflot": ("SU", "aeroflot_website"),
+        "s7": ("S7", "s7_website"),
+    }
+    airline, source = provider_settings[payload.provider]
     deals = []
     for item in payload.results:
         if not route.date_from <= item.depart_date <= route.date_to:
@@ -148,13 +178,13 @@ async def ingest_aeroflot_results(
                 destination_code=route.destination_code,
                 depart_date=item.depart_date,
                 price=item.price,
-                airline="SU",
+                airline=airline,
                 flight_number=item.flight_number,
                 transfers=item.transfers,
                 baggage="unknown",
                 link=item.link,
-                source="aeroflot_website",
-                raw={"extension": True},
+                source=source,
+                raw={"extension": True, "provider": payload.provider},
             )
         )
 

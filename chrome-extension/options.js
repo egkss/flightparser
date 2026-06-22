@@ -3,6 +3,8 @@ const DEFAULTS = {
   extensionToken: "",
   intervalMinutes: 5,
   maxWindowDays: 7,
+  aeroflotEnabled: true,
+  s7Enabled: true,
 };
 
 const form = document.querySelector("#settingsForm");
@@ -49,6 +51,8 @@ async function loadSettings() {
   document.querySelector("#extensionToken").value = settings.extensionToken;
   document.querySelector("#intervalMinutes").value = settings.intervalMinutes;
   document.querySelector("#maxWindowDays").value = settings.maxWindowDays;
+  document.querySelector("#aeroflotEnabled").checked = settings.aeroflotEnabled;
+  document.querySelector("#s7Enabled").checked = settings.s7Enabled;
   await renderStatus();
 }
 
@@ -58,6 +62,8 @@ function readForm() {
     extensionToken: document.querySelector("#extensionToken").value.trim(),
     intervalMinutes: Number(document.querySelector("#intervalMinutes").value),
     maxWindowDays: Number(document.querySelector("#maxWindowDays").value),
+    aeroflotEnabled: document.querySelector("#aeroflotEnabled").checked,
+    s7Enabled: document.querySelector("#s7Enabled").checked,
   };
 }
 

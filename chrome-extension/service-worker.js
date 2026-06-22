@@ -1,9 +1,24 @@
-const ALARM_NAME = "aeroflot-monitor";
+const ALARM_NAME = "direct-fare-monitor";
 const DEFAULTS = {
   serverUrl: "",
   extensionToken: "",
   intervalMinutes: 5,
   maxWindowDays: 7,
+  aeroflotEnabled: true,
+  s7Enabled: true,
+};
+
+const PROVIDERS = {
+  aeroflot: {
+    title: "Аэрофлот",
+    timeoutSeconds: 70,
+    buildUrl: buildAeroflotUrl,
+  },
+  s7: {
+    title: "S7",
+    timeoutSeconds: 100,
+    buildUrl: buildS7Url,
+  },
 };
 
 const pendingTabs = new Map();
@@ -34,15 +49,15 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "aeroflot-results" && sender.tab?.id) {
+  if (message.type === "provider-results" && sender.tab?.id) {
     const pending = pendingTabs.get(sender.tab.id);
-    if (pending) {
+    if (pending && pending.provider === message.provider) {
       pending.resolve(message);
     }
     return false;
   }
 
-  if (message.type === "aeroflot-progress") {
+  if (message.type === "provider-progress") {
     return false;
   }
 
@@ -59,7 +74,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   const pending = pendingTabs.get(tabId);
   if (pending) {
-    pending.reject(new Error("Вкладка Аэрофлота была закрыта"));
+    pending.reject(new Error(`Вкладка ${PROVIDERS[pending.provider].title} была закрыта`));
   }
 });
 
@@ -87,6 +102,8 @@ async function runMonitor() {
     await setStatus("Получаю активные треки...");
     const routes = await requestJson(`${serverUrl}/api/tracking`);
     const activeRoutes = routes.filter((route) => route.active);
+    const enabledProviders = Object.keys(PROVIDERS).filter((provider) => settings[`${provider}Enabled`]);
+    if (!enabledProviders.length) throw new Error("Включи хотя бы один прямой источник");
     let sentRoutes = 0;
     let foundDeals = 0;
     const errors = [];
@@ -100,29 +117,32 @@ async function runMonitor() {
         continue;
       }
 
-      const deals = [];
-      for (const departureDate of dates) {
-        await setStatus(`${route.origin} → ${route.destination}, ${departureDate}`);
-        try {
-          const result = await scanDate(route, departureDate);
-          deals.push(...result);
-        } catch (error) {
-          const message = `${route.origin} → ${route.destination}, ${departureDate}: ${error.message}`;
-          errors.push(message);
-          await setStatus(message);
+      for (const provider of enabledProviders) {
+        const deals = [];
+        for (const departureDate of dates) {
+          await setStatus(`${PROVIDERS[provider].title}: ${route.origin} → ${route.destination}, ${departureDate}`);
+          try {
+            const result = await scanDate(provider, route, departureDate);
+            deals.push(...result);
+          } catch (error) {
+            const message = `${PROVIDERS[provider].title}, ${route.origin} → ${route.destination}, ${departureDate}: ${error.message}`;
+            errors.push(message);
+            await setStatus(message);
+            if (error.blockProvider) break;
+          }
         }
+
+        const bestDeals = selectBestDeals(deals, route.direct_only);
+        if (!bestDeals.length) continue;
+
+        await requestJson(`${serverUrl}/api/providers/results`, {
+          method: "POST",
+          headers: { "X-Extension-Token": settings.extensionToken },
+          body: JSON.stringify({ provider, route_id: route.id, results: bestDeals }),
+        });
+        sentRoutes += 1;
+        foundDeals += bestDeals.length;
       }
-
-      const bestDeals = selectBestDeals(deals, route.direct_only);
-      if (!bestDeals.length) continue;
-
-      await requestJson(`${serverUrl}/api/providers/aeroflot/results`, {
-        method: "POST",
-        headers: { "X-Extension-Token": settings.extensionToken },
-        body: JSON.stringify({ route_id: route.id, results: bestDeals }),
-      });
-      sentRoutes += 1;
-      foundDeals += bestDeals.length;
     }
 
     const errorSuffix = errors.length ? `; ошибок ${errors.length}: ${errors[0]}` : "";
@@ -138,8 +158,9 @@ async function runMonitor() {
   }
 }
 
-async function scanDate(route, departureDate) {
-  const url = buildAeroflotUrl(route.origin_code, route.destination_code, departureDate);
+async function scanDate(provider, route, departureDate) {
+  const providerConfig = PROVIDERS[provider];
+  const url = providerConfig.buildUrl(route.origin_code, route.destination_code, departureDate);
   const tab = await chrome.tabs.create({ url, active: false });
   if (!tab.id) throw new Error("Chrome не создал вкладку поиска");
 
@@ -147,10 +168,11 @@ async function scanDate(route, departureDate) {
     const message = await new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         pendingTabs.delete(tab.id);
-        reject(new Error("Аэрофлот не отдал результаты за 70 секунд"));
-      }, 70000);
+        reject(new Error(`${providerConfig.title} не отдал результаты за ${providerConfig.timeoutSeconds} секунд`));
+      }, providerConfig.timeoutSeconds * 1000);
 
       pendingTabs.set(tab.id, {
+        provider,
         resolve: (value) => {
           clearTimeout(timeoutId);
           pendingTabs.delete(tab.id);
@@ -164,7 +186,11 @@ async function scanDate(route, departureDate) {
       });
     });
 
-    if (message.error) throw new Error(message.error);
+    if (message.error) {
+      const error = new Error(message.error);
+      error.blockProvider = Boolean(message.blocked);
+      throw error;
+    }
     return message.results.map((item) => ({ ...item, depart_date: departureDate, link: url }));
   } finally {
     pendingTabs.delete(tab.id);
@@ -195,6 +221,34 @@ function buildAeroflotUrl(originCode, destinationCode, departureDate) {
     routes: `${originCode}.${departureDate.replaceAll("-", "")}.${destinationCode}`,
   });
   return `https://www.aeroflot.ru/ru-ru/sb/search?${params}`;
+}
+
+function buildS7Url(originCode, destinationCode, departureDate) {
+  const params = new URLSearchParams({
+    DT1: "00:00:00",
+    id: "deeplink",
+    CUR: "RUB",
+    useProxyMode: "true",
+    searchTypeRed: "portalAvia",
+    pet: "false",
+    SC1: "ANY",
+    FLX: "false",
+    LAN: "ru",
+    RDMPTN: "false",
+    journeySpan: "OW",
+    DA1: originCode,
+    AA1: destinationCode,
+    DD1: departureDate,
+    FSC1: "1",
+    mix: "false",
+    FLC: "1",
+    TA: "1",
+    TY: "0",
+    TC: "0",
+    TI: "0",
+    ibe_medium: "aviaparser_extension",
+  });
+  return `https://ibe.s7.ru/air?${params}`;
 }
 
 function buildDateRange(dateFrom, dateTo) {

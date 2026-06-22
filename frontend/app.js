@@ -115,12 +115,22 @@ function renderHistory(items) {
             ${item.is_error_fare ? '<span class="badge">ERROR FARE -30%</span>' : ""}
           </div>
           <div class="meta">${formatDate(item.depart_date)} · найдено ${new Date(item.found_at).toLocaleString("ru-RU")}</div>
+          <div class="meta">Источник: ${formatSource(item.source)}${item.flight_number ? ` · ${item.flight_number}` : ""}</div>
           <div class="meta">Падение: ${item.drop_percent === null ? "нет данных" : `${item.drop_percent}%`}</div>
           <a href="${item.link}" target="_blank" rel="noreferrer">Открыть билет</a>
         </article>
       `,
     )
     .join("");
+}
+
+function formatSource(source) {
+  return {
+    aeroflot_website: "Аэрофлот",
+    s7_website: "S7",
+    travelpayouts: "Travelpayouts",
+    demo: "Demo",
+  }[source] || source;
 }
 
 async function loadHealth() {

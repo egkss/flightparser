@@ -7,7 +7,7 @@
 
   const heartbeatId = setInterval(() => {
     if (!completed) {
-      sendMessage({ type: "aeroflot-progress" });
+      sendMessage({ type: "provider-progress", provider: "aeroflot" });
     }
   }, 10000);
 
@@ -21,7 +21,7 @@
         completed = true;
         clearInterval(intervalId);
         clearInterval(heartbeatId);
-        sendMessage({ type: "aeroflot-results", results });
+        sendMessage({ type: "provider-results", provider: "aeroflot", results });
         return;
       }
     }
@@ -31,7 +31,8 @@
       clearInterval(intervalId);
       clearInterval(heartbeatId);
       sendMessage({
-        type: "aeroflot-results",
+        type: "provider-results",
+        provider: "aeroflot",
         error: "На странице не появились цены; проверь CAPTCHA или блокировку",
         results: [],
       });
