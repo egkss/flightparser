@@ -84,6 +84,14 @@ class MonitorRunResult(BaseModel):
     sent_notifications: int
 
 
+class BrowserParserResponse(BaseModel):
+    enabled: bool
+    last_received_at: datetime | None = None
+    total_results: int
+    source_counts: dict[str, int]
+    results: list[PriceHistoryItem]
+
+
 class AeroflotDealInput(BaseModel):
     depart_date: date
     price: int = Field(ge=1)

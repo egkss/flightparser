@@ -253,6 +253,78 @@ input:focus {
   gap: 12px;
 }
 
+.deal-actions,
+.source-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.source-badge {
+  width: max-content;
+  padding: 4px 8px;
+  color: #344046;
+  background: #e8ecee;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.source-aeroflot {
+  color: #174b87;
+  background: #e2edfb;
+}
+
+.source-s7 {
+  color: #315d14;
+  background: #e6f4d9;
+}
+
+.source-aviasales {
+  color: #075c77;
+  background: #dff3fa;
+}
+
+.source-demo {
+  color: #6b5a29;
+  background: #f4ebcd;
+}
+
+.browser-parser-panel {
+  border-color: rgba(18, 107, 95, 0.38);
+}
+
+.parser-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.parser-summary div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  background: #edf5f2;
+  border: 1px solid rgba(18, 107, 95, 0.16);
+  border-radius: 7px;
+}
+
+.parser-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.source-summary {
+  min-height: 28px;
+  margin-bottom: 12px;
+}
+
+.browser-deal-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .price {
   color: var(--accent-dark);
   font-size: 24px;
@@ -305,6 +377,10 @@ a {
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .browser-deal-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 620px) {
@@ -318,6 +394,10 @@ a {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .parser-summary {
     grid-template-columns: 1fr;
   }
 

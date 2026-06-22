@@ -204,6 +204,39 @@ class Database:
             rows = await cursor.fetchall()
         return [self._history_from_row(row) for row in rows]
 
+    async def browser_parser_results(self, limit: int = 30) -> list[PriceHistoryItem]:
+        async with self.connect() as db:
+            cursor = await db.execute(
+                """
+                SELECT * FROM price_history
+                WHERE source IN ('aeroflot_website', 's7_website')
+                ORDER BY found_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = await cursor.fetchall()
+        return [self._history_from_row(row) for row in rows]
+
+    async def browser_parser_stats(self) -> tuple[int, str | None, dict[str, int]]:
+        async with self.connect() as db:
+            cursor = await db.execute(
+                """
+                SELECT source, COUNT(*) AS result_count, MAX(found_at) AS last_received_at
+                FROM price_history
+                WHERE source IN ('aeroflot_website', 's7_website')
+                GROUP BY source
+                """
+            )
+            rows = await cursor.fetchall()
+
+        source_counts = {row["source"]: row["result_count"] for row in rows}
+        last_received_at = max(
+            (row["last_received_at"] for row in rows if row["last_received_at"]),
+            default=None,
+        )
+        return sum(source_counts.values()), last_received_at, source_counts
+
     async def baseline_stats(self, route_id: int) -> dict[str, float | int | None]:
         async with self.connect() as db:
             cursor = await db.execute(

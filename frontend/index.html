@@ -16,7 +16,7 @@
 
         <div class="status-panel">
           <div>
-            <span>Источник</span>
+            <span>Поиск API</span>
             <strong id="sourceStatus">...</strong>
           </div>
           <div>
@@ -26,6 +26,10 @@
           <div>
             <span>Интервал</span>
             <strong id="intervalStatus">...</strong>
+          </div>
+          <div>
+            <span>Chrome-парсер</span>
+            <strong id="browserParserSidebarStatus">...</strong>
           </div>
         </div>
 
@@ -106,6 +110,32 @@
             </div>
             <div id="trackingList" class="track-list empty-state">Треков пока нет</div>
           </div>
+        </section>
+
+        <section class="panel browser-parser-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Прямые источники</p>
+              <h2>Chrome-парсер</h2>
+            </div>
+            <button id="refreshBrowserParserButton" class="secondary-button" type="button">Обновить</button>
+          </div>
+          <div class="parser-summary">
+            <div>
+              <span>Состояние</span>
+              <strong id="browserParserStatus">...</strong>
+            </div>
+            <div>
+              <span>Последние данные</span>
+              <strong id="browserParserLastReceived">...</strong>
+            </div>
+            <div>
+              <span>Сохранено результатов</span>
+              <strong id="browserParserTotal">...</strong>
+            </div>
+          </div>
+          <div id="browserParserSources" class="source-summary"></div>
+          <div id="browserParserList" class="deal-list empty-state">Данных от расширения пока нет</div>
         </section>
 
         <section class="panel">

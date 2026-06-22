@@ -6,6 +6,8 @@ const resultsList = document.querySelector("#resultsList");
 const trackingList = document.querySelector("#trackingList");
 const historyList = document.querySelector("#historyList");
 const historyTitle = document.querySelector("#historyTitle");
+const browserParserList = document.querySelector("#browserParserList");
+const refreshBrowserParserButton = document.querySelector("#refreshBrowserParserButton");
 
 function formatMoney(value) {
   if (value === null || value === undefined) return "нет данных";
@@ -63,7 +65,10 @@ function renderDeals(deals) {
         <article class="deal">
           <div class="deal-top">
             <strong class="price">${formatMoney(deal.price)}</strong>
-            <a href="${deal.link}" target="_blank" rel="noreferrer">Открыть</a>
+            <div class="deal-actions">
+              ${renderSourceBadge(deal.source)}
+              <a href="${deal.link}" target="_blank" rel="noreferrer">Открыть</a>
+            </div>
           </div>
           <div>${deal.origin} -> ${deal.destination}</div>
           <div class="meta">${formatDate(deal.depart_date)} · ${deal.airline || "авиакомпания неизвестна"} · пересадок: ${deal.transfers}</div>
@@ -126,18 +131,84 @@ function renderHistory(items) {
 
 function formatSource(source) {
   return {
-    aeroflot_website: "Аэрофлот",
-    s7_website: "S7",
-    travelpayouts: "Travelpayouts",
-    demo: "Demo",
+    aeroflot_website: "Аэрофлот · сайт",
+    s7_website: "S7 · сайт",
+    travelpayouts: "Aviasales / Travelpayouts",
+    demo: "Demo-данные",
   }[source] || source;
+}
+
+function sourceClass(source) {
+  return {
+    aeroflot_website: "source-aeroflot",
+    s7_website: "source-s7",
+    travelpayouts: "source-aviasales",
+    demo: "source-demo",
+  }[source] || "source-unknown";
+}
+
+function renderSourceBadge(source) {
+  return `<span class="source-badge ${sourceClass(source)}">${formatSource(source)}</span>`;
+}
+
+function renderBrowserParser(data) {
+  document.querySelector("#browserParserStatus").textContent = data.enabled ? "приём включён" : "токен не настроен";
+  document.querySelector("#browserParserSidebarStatus").textContent = data.enabled ? "включён" : "выключен";
+  document.querySelector("#browserParserLastReceived").textContent = data.last_received_at
+    ? new Date(data.last_received_at).toLocaleString("ru-RU")
+    : "данных ещё нет";
+  document.querySelector("#browserParserTotal").textContent = data.total_results;
+
+  const sourceEntries = Object.entries(data.source_counts);
+  const sourceSummary = document.querySelector("#browserParserSources");
+  sourceSummary.innerHTML = sourceEntries.length
+    ? sourceEntries.map(([source, count]) => `${renderSourceBadge(source)} <strong>${count}</strong>`).join("")
+    : "";
+
+  if (!data.results.length) {
+    browserParserList.className = "deal-list empty-state";
+    browserParserList.textContent = "Данных от расширения пока нет";
+    return;
+  }
+
+  browserParserList.className = "deal-list browser-deal-list";
+  browserParserList.innerHTML = data.results
+    .map(
+      (item) => `
+        <article class="deal browser-deal">
+          <div class="deal-top">
+            <strong class="price">${formatMoney(item.price)}</strong>
+            ${renderSourceBadge(item.source)}
+          </div>
+          <strong>${item.origin} → ${item.destination}</strong>
+          <div class="meta">${formatDate(item.depart_date)} · ${item.flight_number || item.airline || "рейс не указан"} · пересадок: ${item.transfers}</div>
+          <div class="meta">Получено: ${new Date(item.found_at).toLocaleString("ru-RU")}</div>
+          <div class="deal-actions">
+            ${item.is_error_fare ? '<span class="badge">ERROR FARE -30%</span>' : ""}
+            <a href="${item.link}" target="_blank" rel="noreferrer">Открыть у авиакомпании</a>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+async function loadBrowserParser() {
+  const data = await requestJson("/api/providers/browser");
+  renderBrowserParser(data);
+}
+
+function renderBrowserParserError(error) {
+  browserParserList.className = "deal-list empty-state";
+  browserParserList.textContent = `Ошибка обновления: ${error.message}`;
 }
 
 async function loadHealth() {
   const health = await requestJson("/api/health");
-  document.querySelector("#sourceStatus").textContent = health.source;
+  document.querySelector("#sourceStatus").textContent = formatSource(health.source);
   document.querySelector("#telegramStatus").textContent = health.telegram_enabled ? "включен" : "выключен";
   document.querySelector("#intervalStatus").textContent = `${health.check_interval_minutes} мин`;
+  document.querySelector("#browserParserSidebarStatus").textContent = health.extension_enabled ? "включён" : "выключен";
 }
 
 async function loadTracks() {
@@ -197,6 +268,17 @@ runMonitorButton.addEventListener("click", async () => {
   }
 });
 
+refreshBrowserParserButton.addEventListener("click", async () => {
+  refreshBrowserParserButton.disabled = true;
+  try {
+    await loadBrowserParser();
+  } catch (error) {
+    renderBrowserParserError(error);
+  } finally {
+    refreshBrowserParserButton.disabled = false;
+  }
+});
+
 trackingList.addEventListener("click", async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
@@ -225,3 +307,5 @@ function setDefaultDates() {
 setDefaultDates();
 loadHealth().catch((error) => setMessage(error.message, true));
 loadTracks().catch((error) => setMessage(error.message, true));
+loadBrowserParser().catch(renderBrowserParserError);
+setInterval(() => loadBrowserParser().catch(renderBrowserParserError), 30000);

@@ -15,6 +15,7 @@ from .config import Settings, get_settings
 from .database import Database
 from .models import (
     AeroflotResultsIngest,
+    BrowserParserResponse,
     FlightDeal,
     MonitorRunResult,
     ProviderResultsIngest,
@@ -112,6 +113,21 @@ async def delete_tracking(route_id: int, db: Database = Depends(get_db)) -> dict
 @app.get("/api/tracking/{route_id}/history")
 async def route_history(route_id: int, db: Database = Depends(get_db)):
     return await db.history(route_id)
+
+
+@app.get("/api/providers/browser", response_model=BrowserParserResponse)
+async def browser_parser_panel(
+    db: Database = Depends(get_db),
+    settings_: Settings = Depends(get_settings),
+) -> BrowserParserResponse:
+    total_results, last_received_at, source_counts = await db.browser_parser_stats()
+    return BrowserParserResponse(
+        enabled=bool(settings_.extension_api_token),
+        last_received_at=last_received_at,
+        total_results=total_results,
+        source_counts=source_counts,
+        results=await db.browser_parser_results(),
+    )
 
 
 @app.post("/api/monitor/run", response_model=MonitorRunResult)
