@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import date, timedelta
 from urllib.parse import urlencode
 
@@ -14,6 +15,20 @@ EXCLUDED_AIRLINE_CODES = {"DP"}
 EXCLUDED_AIRLINE_NAMES = {"pobeda", "победа"}
 
 
+@dataclass(frozen=True)
+class SearchWindowOutcome:
+    deals: list[FlightDeal]
+    excluded_results_count: int = 0
+    excluded_airlines: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SearchDayOutcome:
+    deals: list[FlightDeal]
+    excluded_results_count: int = 0
+    excluded_airlines: tuple[str, ...] = ()
+
+
 class AviasalesClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -25,8 +40,16 @@ class AviasalesClient:
         origin_code: str,
         destination_code: str,
     ) -> list[FlightDeal]:
+        return (await self.search_window_with_meta(request, origin_code, destination_code)).deals
+
+    async def search_window_with_meta(
+        self,
+        request: SearchRequest,
+        origin_code: str,
+        destination_code: str,
+    ) -> SearchWindowOutcome:
         if not self.settings.travelpayouts_token:
-            return self._demo_results(request, origin_code, destination_code)
+            return SearchWindowOutcome(self._demo_results(request, origin_code, destination_code))
 
         dates = self._date_range(request.date_from, request.date_to)
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -37,12 +60,20 @@ class AviasalesClient:
             batches = await asyncio.gather(*tasks, return_exceptions=True)
 
         deals: list[FlightDeal] = []
+        excluded_results_count = 0
+        excluded_airlines: set[str] = set()
         for batch in batches:
             if isinstance(batch, Exception):
                 continue
-            deals.extend(batch)
+            deals.extend(batch.deals)
+            excluded_results_count += batch.excluded_results_count
+            excluded_airlines.update(batch.excluded_airlines)
 
-        return self._dedupe_and_sort(deals)[:3]
+        return SearchWindowOutcome(
+            deals=self._dedupe_and_sort(deals)[:3],
+            excluded_results_count=excluded_results_count,
+            excluded_airlines=tuple(sorted(excluded_airlines)),
+        )
 
     async def _search_day(
         self,
@@ -51,7 +82,7 @@ class AviasalesClient:
         origin_code: str,
         destination_code: str,
         departure_date: date,
-    ) -> list[FlightDeal]:
+    ) -> SearchDayOutcome:
         params = {
             "origin": origin_code,
             "destination": destination_code,
@@ -69,8 +100,12 @@ class AviasalesClient:
         items = payload.get("data") or []
 
         deals: list[FlightDeal] = []
+        excluded_results_count = 0
+        excluded_airlines: set[str] = set()
         for item in items:
             if self._is_excluded_airline(item):
+                excluded_results_count += 1
+                excluded_airlines.add(self._excluded_airline_label(item))
                 continue
             if request.direct_only and int(item.get("transfers") or 0) != 0:
                 continue
@@ -93,7 +128,11 @@ class AviasalesClient:
                     raw=item,
                 )
             )
-        return deals
+        return SearchDayOutcome(
+            deals=deals,
+            excluded_results_count=excluded_results_count,
+            excluded_airlines=tuple(sorted(excluded_airlines)),
+        )
 
     def _build_link(self, item: dict, origin_code: str, destination_code: str, departure_date: date) -> str:
         link = item.get("link")
@@ -150,3 +189,9 @@ class AviasalesClient:
 
         text = " ".join(str(value) for value in item.values() if isinstance(value, str)).lower()
         return any(name in text for name in EXCLUDED_AIRLINE_NAMES)
+
+    def _excluded_airline_label(self, item: dict) -> str:
+        airline = str(item.get("airline") or "").strip().upper()
+        if airline == "DP":
+            return "Победа"
+        return airline or "Исключённая авиакомпания"

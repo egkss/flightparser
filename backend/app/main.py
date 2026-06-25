@@ -95,8 +95,14 @@ async def health(settings_: Settings = Depends(get_settings)) -> dict:
 @app.post("/api/search", response_model=SearchResponse)
 async def search(request: SearchRequest, api_client: AviasalesClient = Depends(get_client)) -> SearchResponse:
     origin_code, destination_code = _resolve_codes(request.origin, request.destination)
-    results = await api_client.search_window(request, origin_code, destination_code)
-    return SearchResponse(origin_code=origin_code, destination_code=destination_code, results=results)
+    outcome = await api_client.search_window_with_meta(request, origin_code, destination_code)
+    return SearchResponse(
+        origin_code=origin_code,
+        destination_code=destination_code,
+        results=outcome.deals,
+        excluded_results_count=outcome.excluded_results_count,
+        excluded_airlines=list(outcome.excluded_airlines),
+    )
 
 
 @app.get("/api/tracking")

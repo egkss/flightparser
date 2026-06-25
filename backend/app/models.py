@@ -76,6 +76,8 @@ class SearchResponse(BaseModel):
     origin_code: str
     destination_code: str
     results: list[FlightDeal]
+    excluded_results_count: int = 0
+    excluded_airlines: list[str] = Field(default_factory=list)
 
 
 class RouteWithStats(TrackingRoute):

@@ -57,10 +57,16 @@ async function requestJson(url, options = {}) {
   return payload;
 }
 
-function renderDeals(deals) {
+function renderDeals(deals, meta = {}) {
   if (!deals.length) {
     resultsList.className = "deal-list empty-state";
-    resultsList.textContent = "Нет прямых рейсов внутри окна";
+    const excludedCount = Number(meta.excluded_results_count || 0);
+    const excludedAirlines = meta.excluded_airlines?.length
+      ? meta.excluded_airlines.join(", ")
+      : "исключённые авиакомпании";
+    resultsList.textContent = excludedCount
+      ? `Aviasales нашёл ${excludedCount} вариантов, но они скрыты: ${excludedAirlines}`
+      : "Нет билетов без Победы внутри окна";
     return;
   }
 
@@ -401,7 +407,7 @@ searchForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    renderDeals(data.results);
+    renderDeals(data.results, data);
     setMessage(`Готово: ${data.origin_code} -> ${data.destination_code}`);
   } catch (error) {
     setMessage(error.message, true);
