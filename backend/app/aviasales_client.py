@@ -10,6 +10,10 @@ from .config import Settings
 from .models import FlightDeal, SearchRequest
 
 
+EXCLUDED_AIRLINE_CODES = {"DP"}
+EXCLUDED_AIRLINE_NAMES = {"pobeda", "победа"}
+
+
 class AviasalesClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -66,6 +70,8 @@ class AviasalesClient:
 
         deals: list[FlightDeal] = []
         for item in items:
+            if self._is_excluded_airline(item):
+                continue
             if request.direct_only and int(item.get("transfers") or 0) != 0:
                 continue
             price = item.get("price")
@@ -136,3 +142,11 @@ class AviasalesClient:
             if current is None or deal.price < current.price:
                 best_by_key[key] = deal
         return sorted(best_by_key.values(), key=lambda item: (item.price, item.depart_date))
+
+    def _is_excluded_airline(self, item: dict) -> bool:
+        airline = str(item.get("airline") or "").strip().upper()
+        if airline in EXCLUDED_AIRLINE_CODES:
+            return True
+
+        text = " ".join(str(value) for value in item.values() if isinstance(value, str)).lower()
+        return any(name in text for name in EXCLUDED_AIRLINE_NAMES)

@@ -8,224 +8,216 @@
   </head>
   <body>
     <main class="app-shell">
-      <aside class="sidebar">
+      <header class="hero panel">
         <div>
           <p class="eyebrow">Aviaparser</p>
-          <h1>Мониторинг дешевых авиабилетов</h1>
+          <h1>Мониторинг авиабилетов без Победы</h1>
+          <p class="hero-text">Поиск через Aviasales, прямые источники из Chrome и отдельная лента Error Fare.</p>
         </div>
 
         <div class="status-panel">
-          <div>
-            <span>Поиск API</span>
-            <strong id="sourceStatus">...</strong>
-          </div>
-          <div>
-            <span>Telegram</span>
-            <strong id="telegramStatus">...</strong>
-          </div>
-          <div>
-            <span>Интервал</span>
-            <strong id="intervalStatus">...</strong>
-          </div>
-          <div>
-            <span>Chrome-парсер</span>
-            <strong id="browserParserSidebarStatus">...</strong>
-          </div>
+          <div><span>Aviasales</span><strong id="sourceStatus">...</strong></div>
+          <div><span>Telegram</span><strong id="telegramStatus">...</strong></div>
+          <div><span>Интервал</span><strong id="intervalStatus">...</strong></div>
+          <div><span>Chrome</span><strong id="browserParserSidebarStatus">...</strong></div>
         </div>
+      </header>
 
-        <button id="runMonitorButton" class="ghost-button" type="button">Запустить проверку</button>
-      </aside>
+      <nav class="tabs" aria-label="Разделы">
+        <button class="tab-button active" type="button" data-tab="search">Поиск</button>
+        <button class="tab-button" type="button" data-tab="browser">Chrome-парсер</button>
+        <button class="tab-button" type="button" data-tab="feed">Лента</button>
+        <button class="tab-button" type="button" data-tab="analytics">Аналитика</button>
+      </nav>
 
       <section class="workspace">
-        <form id="searchForm" class="panel search-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Поиск</p>
-              <h2>Маршрут и окно дат</h2>
-            </div>
-            <button class="primary-button" type="submit">Найти</button>
-          </div>
-
-          <div class="form-grid">
-            <label>
-              <span>Откуда</span>
-              <input name="origin" value="Омск" autocomplete="off" required />
-            </label>
-            <label>
-              <span>Куда</span>
-              <input name="destination" value="Москва" autocomplete="off" required />
-            </label>
-            <label>
-              <span>Дата от</span>
-              <input name="date_from" type="date" required />
-            </label>
-            <label>
-              <span>Дата до</span>
-              <input name="date_to" type="date" required />
-            </label>
-            <label>
-              <span>Порог цены, RUB</span>
-              <input name="price_threshold" type="number" min="1" placeholder="например 9000" />
-            </label>
-          </div>
-
-          <div class="toggles">
-            <label class="toggle">
-              <input name="direct_only" type="checkbox" checked />
-              <span>Только прямые</span>
-            </label>
-            <label class="toggle">
-              <input name="baggage_required" type="checkbox" />
-              <span>Багаж обязателен</span>
-            </label>
-            <label class="toggle">
-              <input name="notify_error_fare" type="checkbox" checked />
-              <span>Error fare -30%</span>
-            </label>
-          </div>
-
-          <div class="actions-row">
-            <button id="createTrackButton" class="secondary-button" type="button">Поставить на мониторинг</button>
-            <p id="formMessage" class="message"></p>
-          </div>
-        </form>
-
-        <section class="split-grid">
-          <div class="panel">
+        <section class="tab-panel active" data-tab-panel="search">
+          <form id="searchForm" class="panel search-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Результаты</p>
-                <h2>Топ-3 в окне</h2>
+                <p class="eyebrow">Aviasales</p>
+                <h2>Маршрут и окно дат</h2>
               </div>
+              <button class="primary-button" type="submit">Найти</button>
             </div>
-            <div id="resultsList" class="deal-list empty-state">Нет результатов</div>
-          </div>
 
-          <div class="panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">Треки</p>
-                <h2>Активный мониторинг</h2>
-              </div>
+            <div class="form-grid">
+              <label>
+                <span>Откуда</span>
+                <input name="origin" value="Омск" autocomplete="off" required />
+              </label>
+              <label>
+                <span>Куда</span>
+                <input name="destination" value="Москва" autocomplete="off" required />
+              </label>
+              <label>
+                <span>Дата от</span>
+                <input name="date_from" type="date" required />
+              </label>
+              <label>
+                <span>Дата до</span>
+                <input name="date_to" type="date" required />
+              </label>
+              <label>
+                <span>Порог цены, RUB</span>
+                <input name="price_threshold" type="number" min="1" placeholder="например 9000" />
+              </label>
             </div>
-            <div id="trackingList" class="track-list empty-state">Треков пока нет</div>
-          </div>
-        </section>
 
-        <section class="panel browser-parser-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Прямые источники</p>
-              <h2>Chrome-парсер</h2>
+            <div class="toggles">
+              <label class="toggle">
+                <input name="direct_only" type="checkbox" checked />
+                <span>Только прямые</span>
+              </label>
+              <label class="toggle">
+                <input name="baggage_required" type="checkbox" />
+                <span>Багаж обязателен</span>
+              </label>
+              <label class="toggle">
+                <input name="notify_error_fare" type="checkbox" checked />
+                <span>Error fare -30%</span>
+              </label>
+              <span class="filter-note">Победа исключается автоматически</span>
             </div>
-            <button id="refreshBrowserParserButton" class="secondary-button" type="button">Обновить</button>
-          </div>
-          <div class="parser-summary">
-            <div>
-              <span>Состояние</span>
-              <strong id="browserParserStatus">...</strong>
-            </div>
-            <div>
-              <span>Последние данные</span>
-              <strong id="browserParserLastReceived">...</strong>
-            </div>
-            <div>
-              <span>Сохранено результатов</span>
-              <strong id="browserParserTotal">...</strong>
-            </div>
-            <div>
-              <span>Heartbeat</span>
-              <strong id="browserParserHeartbeat">...</strong>
-            </div>
-          </div>
-          <p id="browserParserCurrentRoute" class="message"></p>
-          <p id="browserParserError" class="message error-message"></p>
-          <div id="browserParserSources" class="source-summary"></div>
-          <div id="browserParserList" class="deal-list empty-state">Данных от расширения пока нет</div>
-        </section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Фильтры</p>
-              <h2>Лента всех результатов</h2>
+            <div class="actions-row">
+              <button id="createTrackButton" class="secondary-button" type="button">Поставить на мониторинг</button>
+              <button id="runMonitorButton" class="ghost-button" type="button">Запустить проверку</button>
+              <p id="formMessage" class="message"></p>
             </div>
-          </div>
-          <form id="resultFilters" class="filter-grid">
-            <label>
-              <span>Источник</span>
-              <select name="source">
-                <option value="">Все</option>
-                <option value="travelpayouts">Aviasales / Travelpayouts</option>
-                <option value="aeroflot_website">Аэрофлот</option>
-                <option value="s7_website">S7</option>
-                <option value="demo">Demo</option>
-              </select>
-            </label>
-            <label>
-              <span>Маршрут</span>
-              <select name="route_id" data-route-select><option value="">Все</option></select>
-            </label>
-            <label><span>Дата от</span><input name="date_from" type="date" /></label>
-            <label><span>Дата до</span><input name="date_to" type="date" /></label>
-            <label><span>Цена от</span><input name="min_price" type="number" min="1" /></label>
-            <label><span>Цена до</span><input name="max_price" type="number" min="1" /></label>
-            <label class="toggle"><input name="direct_only" type="checkbox" /><span>Только прямые</span></label>
-            <label class="toggle"><input name="error_only" type="checkbox" /><span>Только Error Fare</span></label>
-            <button class="primary-button" type="submit">Применить</button>
           </form>
-          <div id="resultFeedList" class="deal-list empty-state">Результаты появятся после проверки</div>
+
+          <section class="split-grid">
+            <div class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Результаты</p>
+                  <h2>Топ-3 в окне</h2>
+                </div>
+              </div>
+              <div id="resultsList" class="deal-list empty-state">Нет результатов</div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Треки</p>
+                  <h2>Активный мониторинг</h2>
+                </div>
+              </div>
+              <div id="trackingList" class="track-list empty-state">Треков пока нет</div>
+            </div>
+          </section>
         </section>
 
-        <section class="split-grid">
-          <div class="panel error-fare-panel">
+        <section class="tab-panel" data-tab-panel="browser">
+          <div class="panel browser-parser-panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Аномалии</p>
-                <h2>Лента Error Fare</h2>
+                <p class="eyebrow">Прямые источники</p>
+                <h2>Chrome-парсер</h2>
               </div>
+              <button id="refreshBrowserParserButton" class="secondary-button" type="button">Обновить</button>
             </div>
-            <div class="compact-filters">
-              <select id="errorFareRoute" data-route-select><option value="">Все маршруты</option></select>
-              <select id="errorFareSource">
-                <option value="">Все источники</option>
-                <option value="travelpayouts">Aviasales / Travelpayouts</option>
-                <option value="aeroflot_website">Аэрофлот</option>
-                <option value="s7_website">S7</option>
-              </select>
+            <div class="parser-summary">
+              <div><span>Состояние</span><strong id="browserParserStatus">...</strong></div>
+              <div><span>Последние данные</span><strong id="browserParserLastReceived">...</strong></div>
+              <div><span>Сохранено результатов</span><strong id="browserParserTotal">...</strong></div>
+              <div><span>Heartbeat</span><strong id="browserParserHeartbeat">...</strong></div>
             </div>
-            <div id="errorFareList" class="deal-list empty-state">Кандидатов пока нет</div>
+            <p id="browserParserCurrentRoute" class="message"></p>
+            <p id="browserParserError" class="message error-message"></p>
+            <div id="browserParserSources" class="source-summary"></div>
+            <div id="browserParserList" class="deal-list empty-state">Данных от расширения пока нет</div>
           </div>
+        </section>
 
+        <section class="tab-panel" data-tab-panel="feed">
           <div class="panel">
             <div class="panel-heading">
               <div>
-                <p class="eyebrow">Динамика</p>
-                <h2>График цены</h2>
+                <p class="eyebrow">Фильтры</p>
+                <h2>Лента всех результатов</h2>
               </div>
             </div>
-            <div class="compact-filters">
-              <select id="chartRoute" data-route-select><option value="">Выбери маршрут</option></select>
-              <select id="chartSource">
-                <option value="">Все источники</option>
-                <option value="travelpayouts">Aviasales / Travelpayouts</option>
-                <option value="aeroflot_website">Аэрофлот</option>
-                <option value="s7_website">S7</option>
-                <option value="demo">Demo</option>
-              </select>
-            </div>
-            <div id="priceChart" class="chart empty-state">Недостаточно данных</div>
+            <form id="resultFilters" class="filter-grid">
+              <label>
+                <span>Источник</span>
+                <select name="source">
+                  <option value="">Все</option>
+                  <option value="travelpayouts">Aviasales</option>
+                  <option value="aeroflot_website">Аэрофлот</option>
+                  <option value="s7_website">S7</option>
+                  <option value="demo">Demo</option>
+                </select>
+              </label>
+              <label>
+                <span>Маршрут</span>
+                <select name="route_id" data-route-select><option value="">Все</option></select>
+              </label>
+              <label><span>Дата от</span><input name="date_from" type="date" /></label>
+              <label><span>Дата до</span><input name="date_to" type="date" /></label>
+              <label><span>Цена от</span><input name="min_price" type="number" min="1" /></label>
+              <label><span>Цена до</span><input name="max_price" type="number" min="1" /></label>
+              <label class="toggle"><input name="direct_only" type="checkbox" /><span>Только прямые</span></label>
+              <label class="toggle"><input name="error_only" type="checkbox" /><span>Только Error Fare</span></label>
+              <button class="primary-button" type="submit">Применить</button>
+            </form>
+            <div id="resultFeedList" class="deal-list empty-state">Результаты появятся после проверки</div>
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">История</p>
-              <h2 id="historyTitle">Выбери трек</h2>
+        <section class="tab-panel" data-tab-panel="analytics">
+          <section class="split-grid">
+            <div class="panel error-fare-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Аномалии</p>
+                  <h2>Лента Error Fare</h2>
+                </div>
+              </div>
+              <div class="compact-filters">
+                <select id="errorFareRoute" data-route-select><option value="">Все маршруты</option></select>
+                <select id="errorFareSource">
+                  <option value="">Все источники</option>
+                  <option value="travelpayouts">Aviasales</option>
+                  <option value="aeroflot_website">Аэрофлот</option>
+                  <option value="s7_website">S7</option>
+                </select>
+              </div>
+              <div id="errorFareList" class="deal-list empty-state">Кандидатов пока нет</div>
             </div>
-          </div>
-          <div id="historyList" class="history-list empty-state">История появится после первой проверки</div>
+
+            <div class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Динамика</p>
+                  <h2>График цены</h2>
+                </div>
+              </div>
+              <div class="compact-filters">
+                <select id="chartRoute" data-route-select><option value="">Выбери маршрут</option></select>
+                <select id="chartSource">
+                  <option value="">Все источники</option>
+                  <option value="travelpayouts">Aviasales</option>
+                  <option value="aeroflot_website">Аэрофлот</option>
+                  <option value="s7_website">S7</option>
+                  <option value="demo">Demo</option>
+                </select>
+              </div>
+              <div id="priceChart" class="chart empty-state">Недостаточно данных</div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">История</p>
+                <h2 id="historyTitle">Выбери трек</h2>
+              </div>
+            </div>
+            <div id="historyList" class="history-list empty-state">История появится после первой проверки</div>
+          </section>
         </section>
       </section>
     </main>

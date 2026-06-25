@@ -12,6 +12,8 @@ const resultFilters = document.querySelector("#resultFilters");
 const resultFeedList = document.querySelector("#resultFeedList");
 const errorFareList = document.querySelector("#errorFareList");
 const priceChart = document.querySelector("#priceChart");
+const tabButtons = document.querySelectorAll("[data-tab]");
+const tabPanels = document.querySelectorAll("[data-tab-panel]");
 
 function formatMoney(value) {
   if (value === null || value === undefined) return "нет данных";
@@ -141,7 +143,7 @@ function formatSource(source) {
   return {
     aeroflot_website: "Аэрофлот · сайт",
     s7_website: "S7 · сайт",
-    travelpayouts: "Aviasales / Travelpayouts",
+    travelpayouts: "Aviasales",
     demo: "Demo-данные",
   }[source] || source;
 }
@@ -452,6 +454,14 @@ function renderChartError(error) {
   priceChart.className = "chart empty-state";
   priceChart.textContent = `Ошибка графика: ${error.message}`;
 }
+
+tabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const tab = button.dataset.tab;
+    tabButtons.forEach((item) => item.classList.toggle("active", item === button));
+    tabPanels.forEach((panel) => panel.classList.toggle("active", panel.dataset.tabPanel === tab));
+  });
+});
 
 trackingList.addEventListener("click", async (event) => {
   const target = event.target;
