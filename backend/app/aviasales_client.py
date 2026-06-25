@@ -141,8 +141,22 @@ class AviasalesClient:
                 return str(link)
             return f"https://www.aviasales.ru{link}"
 
+        return self.build_search_link(origin_code, destination_code, departure_date)
+
+    def build_search_link(
+        self,
+        origin_code: str,
+        destination_code: str,
+        departure_date: date,
+        airline: str | None = None,
+    ) -> str:
         search_code = f"{origin_code}{departure_date.strftime('%d%m')}{destination_code}1"
-        query = urlencode({"marker": self.settings.travelpayouts_marker}) if self.settings.travelpayouts_marker else ""
+        query_data = {}
+        if self.settings.travelpayouts_marker:
+            query_data["marker"] = self.settings.travelpayouts_marker
+        if airline:
+            query_data["airlines"] = airline
+        query = urlencode(query_data)
         suffix = f"?{query}" if query else ""
         return f"https://www.aviasales.ru/search/{search_code}{suffix}"
 

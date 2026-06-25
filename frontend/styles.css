@@ -408,6 +408,14 @@ select option {
   border-left: 4px solid rgba(96, 165, 250, 0.74);
 }
 
+.info-deal {
+  border-left: 4px solid rgba(246, 196, 83, 0.74);
+}
+
+.fallback-deal {
+  border-left: 4px solid rgba(72, 214, 181, 0.74);
+}
+
 .error-fare-panel .verified-deal {
   border-left-color: var(--gold);
 }

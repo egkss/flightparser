@@ -72,12 +72,21 @@ class VerifiedHistoryItem(PriceHistoryItem):
     repeated_checks: int = 1
 
 
+class SearchFallbackLink(BaseModel):
+    title: str
+    description: str
+    link: str
+    source: str = "travelpayouts"
+    airline: str | None = None
+
+
 class SearchResponse(BaseModel):
     origin_code: str
     destination_code: str
     results: list[FlightDeal]
     excluded_results_count: int = 0
     excluded_airlines: list[str] = Field(default_factory=list)
+    fallback_links: list[SearchFallbackLink] = Field(default_factory=list)
 
 
 class RouteWithStats(TrackingRoute):

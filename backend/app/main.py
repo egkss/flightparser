@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hmac
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .aviasales_client import AviasalesClient
+from .aviasales_client import AviasalesClient, SearchWindowOutcome
 from .cities import resolve_city_code
 from .config import Settings, get_settings
 from .database import Database
@@ -26,6 +26,7 @@ from .models import (
     ResultFeedResponse,
     SearchRequest,
     SearchResponse,
+    SearchFallbackLink,
     TrackingCreate,
 )
 from .scheduler import PriceMonitor, create_scheduler
@@ -96,12 +97,14 @@ async def health(settings_: Settings = Depends(get_settings)) -> dict:
 async def search(request: SearchRequest, api_client: AviasalesClient = Depends(get_client)) -> SearchResponse:
     origin_code, destination_code = _resolve_codes(request.origin, request.destination)
     outcome = await api_client.search_window_with_meta(request, origin_code, destination_code)
+    fallback_links = _build_aeroflot_fallback_links(request, api_client, origin_code, destination_code, outcome)
     return SearchResponse(
         origin_code=origin_code,
         destination_code=destination_code,
         results=outcome.deals,
         excluded_results_count=outcome.excluded_results_count,
         excluded_airlines=list(outcome.excluded_airlines),
+        fallback_links=fallback_links,
     )
 
 
@@ -312,6 +315,31 @@ def _check_extension_token(extension_token: str, settings_: Settings) -> None:
         raise HTTPException(status_code=503, detail="Приём данных расширения не настроен")
     if not hmac.compare_digest(extension_token, settings_.extension_api_token):
         raise HTTPException(status_code=401, detail="Неверный токен расширения")
+
+
+def _build_aeroflot_fallback_links(
+    request: SearchRequest,
+    api_client: AviasalesClient,
+    origin_code: str,
+    destination_code: str,
+    outcome: SearchWindowOutcome,
+) -> list[SearchFallbackLink]:
+    if outcome.deals or outcome.excluded_results_count == 0:
+        return []
+
+    dates = [
+        request.date_from + timedelta(days=offset)
+        for offset in range((request.date_to - request.date_from).days + 1)
+    ]
+    return [
+        SearchFallbackLink(
+            title=f"Аэрофлот через Aviasales · {departure_date.strftime('%d.%m.%Y')}",
+            description="Aviasales API вернул только Победу; открой поиск и выбери Аэрофлот в фильтрах",
+            link=api_client.build_search_link(origin_code, destination_code, departure_date, airline="SU"),
+            airline="SU",
+        )
+        for departure_date in dates
+    ]
 
 
 def _resolve_codes(origin: str, destination: str) -> tuple[str, str]:

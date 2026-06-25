@@ -59,11 +59,25 @@ async function requestJson(url, options = {}) {
 
 function renderDeals(deals, meta = {}) {
   if (!deals.length) {
-    resultsList.className = "deal-list empty-state";
     const excludedCount = Number(meta.excluded_results_count || 0);
     const excludedAirlines = meta.excluded_airlines?.length
       ? meta.excluded_airlines.join(", ")
       : "исключённые авиакомпании";
+    const fallbackLinks = meta.fallback_links || [];
+    if (fallbackLinks.length) {
+      resultsList.className = "deal-list";
+      resultsList.innerHTML = `
+        <article class="deal info-deal">
+          <strong>Нет билетов без Победы в API Aviasales</strong>
+          <div class="meta">Aviasales нашёл ${excludedCount} вариантов, но они скрыты: ${excludedAirlines}</div>
+          <div class="meta">Ниже — прямые переходы на поиск Аэрофлота через Aviasales без данных Chrome-расширения.</div>
+        </article>
+        ${fallbackLinks.map(renderFallbackLink).join("")}
+      `;
+      return;
+    }
+
+    resultsList.className = "deal-list empty-state";
     resultsList.textContent = excludedCount
       ? `Aviasales нашёл ${excludedCount} вариантов, но они скрыты: ${excludedAirlines}`
       : "Нет билетов без Победы внутри окна";
@@ -88,6 +102,22 @@ function renderDeals(deals, meta = {}) {
       `,
     )
     .join("");
+}
+
+function renderFallbackLink(item) {
+  return `
+    <article class="deal fallback-deal">
+      <div class="deal-top">
+        <strong>${item.title}</strong>
+        <div class="deal-actions">
+          ${renderSourceBadge(item.source)}
+          <a href="${item.link}" target="_blank" rel="noreferrer">Открыть Aviasales</a>
+        </div>
+      </div>
+      <div class="meta">${item.description}</div>
+      <div class="meta">Авиакомпания: ${item.airline || "Аэрофлот"}</div>
+    </article>
+  `;
 }
 
 function renderTracks(routes) {
