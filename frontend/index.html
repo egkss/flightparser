@@ -4,22 +4,34 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Aviaparser</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=dashboard-v2" />
   </head>
   <body>
     <main class="app-shell">
       <header class="hero panel">
-        <div>
+        <div class="hero-copy">
           <p class="eyebrow">Aviaparser</p>
           <h1>Мониторинг авиабилетов без Победы</h1>
           <p class="hero-text">Поиск через Aviasales, прямые источники из Chrome и отдельная лента Error Fare.</p>
+          <div class="hero-badges">
+            <span>Aviasales only</span>
+            <span>Победа исключена</span>
+            <span>Error Fare alerts</span>
+          </div>
         </div>
 
-        <div class="status-panel">
-          <div><span>Aviasales</span><strong id="sourceStatus">...</strong></div>
-          <div><span>Telegram</span><strong id="telegramStatus">...</strong></div>
-          <div><span>Интервал</span><strong id="intervalStatus">...</strong></div>
-          <div><span>Chrome</span><strong id="browserParserSidebarStatus">...</strong></div>
+        <div class="dashboard-summary">
+          <div class="status-panel">
+            <div><span>Aviasales</span><strong id="sourceStatus">...</strong></div>
+            <div><span>Telegram</span><strong id="telegramStatus">...</strong></div>
+            <div><span>Интервал</span><strong id="intervalStatus">...</strong></div>
+            <div><span>Chrome</span><strong id="browserParserSidebarStatus">...</strong></div>
+          </div>
+          <div class="metric-grid">
+            <div><span>Активных треков</span><strong id="activeTrackCount">0</strong></div>
+            <div><span>Лучшая цена</span><strong id="bestPriceStatus">нет данных</strong></div>
+            <div><span>Последняя проверка</span><strong id="latestCheckStatus">нет данных</strong></div>
+          </div>
         </div>
       </header>
 
@@ -222,6 +234,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=dashboard-v2"></script>
   </body>
 </html>

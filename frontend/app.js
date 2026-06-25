@@ -85,6 +85,8 @@ function renderDeals(deals) {
 }
 
 function renderTracks(routes) {
+  renderRouteSummary(routes);
+
   if (!routes.length) {
     trackingList.className = "track-list empty-state";
     trackingList.textContent = "Треков пока нет";
@@ -107,6 +109,24 @@ function renderTracks(routes) {
       `,
     )
     .join("");
+}
+
+function renderRouteSummary(routes) {
+  const activeRoutes = routes.filter((route) => route.active);
+  const bestPrices = routes.map((route) => route.best_price).filter((price) => price !== null && price !== undefined);
+  const latestChecks = routes
+    .map((route) => route.last_checked_at)
+    .filter(Boolean)
+    .sort();
+  const latestCheck = latestChecks[latestChecks.length - 1];
+
+  document.querySelector("#activeTrackCount").textContent = activeRoutes.length;
+  document.querySelector("#bestPriceStatus").textContent = bestPrices.length
+    ? formatMoney(Math.min(...bestPrices))
+    : "нет данных";
+  document.querySelector("#latestCheckStatus").textContent = latestCheck
+    ? new Date(latestCheck).toLocaleString("ru-RU")
+    : "нет данных";
 }
 
 function renderHistory(items) {
